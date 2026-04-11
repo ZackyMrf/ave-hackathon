@@ -1,189 +1,215 @@
-# Ave Accumulation Monitor - Hackathon Submission
+# Ave Accumulation Monitor
 
-> **Detect smart money accumulation before price moves.**
+Crypto monitoring workspace that combines:
 
-An AI-powered trading intelligence tool that identifies pre-pump signals by analyzing on-chain data from Ave.ai API v2.
+- A Python analysis engine (single token and market sweep)
+- A FastAPI backend for analysis, trend matrix, chart data, and alerts
+- A React dashboard for interactive monitoring and charting
+- An advanced Telegram bot for commands, watchlist, and alert management
 
-## 🎯 Problem Statement
+## What Is Implemented
 
-Most traders react to price movements after they happen. By the time a token pumps 10x, the smart money has already accumulated. This tool finds accumulation signals **before** the crowd notices.
+### Core analysis
 
-## 🚀 Solution
+- Accumulation/risk analysis per token using AVE data
+- Sweep scanning by category and chain
+- Supported chains: solana, ethereum, bsc, base, arbitrum, optimism, polygon, avalanche
+- Supported categories: all, trending, meme, defi, gaming, ai, new
 
-**Ave Accumulation Monitor** uses multi-signal analysis to detect:
+### API server
 
-- Volume/price divergence (quiet accumulation)
-- Whale wallet movements
-- TVL stability patterns
-- Holder distribution shifts
-- Anomaly detection via Z-score
+The backend in api_server.py exposes endpoints for:
 
-### Key Innovation
+- Health/chains
+- Token analysis and sweep
+- Multi-token live prices
+- Category-network trend matrix
+- Klines/chart data
+- AVE proxy endpoints (token, tokens, whales, holders)
+- Alert CRUD and alert statistics
 
-Instead of simple price alerts, we calculate an **Accumulation Score (0-100)** based on 8 weighted signals, dynamically adjusted by market phase.
+### Web dashboard (React + Vite)
 
-## 📊 Demo
+- Token analyzer UI
+- Sweep table with trend snapshots
+- Interactive chart views (candlestick, line, area)
+- Overlay indicators (MA/EMA)
+- Live price refresh
+- Alert panel (create/list/delete/toggle)
 
-### Live Bot
+### Telegram bot (advanced)
 
-Try it now: [@aveclawmonitor_bot](https://t.me/aveclawmonitor_bot)
+- Commands: /start, /help, /analyze, /sweep, /alert, /watchlist
+- Watchlist add/list/remove
+- Alert create/list/delete/toggle
+- Background monitoring worker (5-minute loop)
 
-### Commands
+## Repository Layout
 
-```
-/ave jup solana          # Single token analysis
-/avesweep meme solana 5  # Sweep trending category
-/ave watch pepe solana   # Add to watchlist (auto-alert)
-/ave list                # Show watchlist
-```
-
-### Sample Output
-
-```
-📊 AVE MONITOR — JUP
-
-Chain: solana
-Price: $0.1653 | 24h: +2.1%
-TVL: $3.91M | Holders: 831,848
-
-🎯 Score: 28/100 🟢
-Risk-Adj: 23/100 | Conf: 21%
-Phase: CONSOLIDATION
-
-Signals:
-⚡️ Vol Divergence: 20/30
-📈 Vol Momentum: 5/25
-🏦 TVL Stability: 16/20
-👥 Holders: 4/15
-💎 TVL Conf: 6/10
-🐋 Whale: 0/40
-📊 Anomaly: 8/27
-📚 Pattern: 4/8
-
-Top Whales:
-5eosrve...: 21.23%
-5SybwTv...: 7.12%
-...
-
-Action: 🟢 BACKGROUND — No action yet
+```text
+ave-accumulation-monitor/
+├─ api_server.py
+├─ alerts_manager.py
+├─ ave_api_service.py
+├─ telegram_bot_advanced.py
+├─ scripts/
+│  ├─ ave_monitor.py
+│  └─ help.py
+├─ services/
+│  └─ ave_cloud_wss.py
+├─ frontend/
+│  ├─ src/
+│  └─ package.json
+├─ archive/
+│  ├─ demo/
+│  └─ tests/
+└─ README.md
 ```
 
-## 🛠️ Tech Stack
+## Requirements
 
-- **Python 3.11+** — Core engine
-- **Ave.ai API v2** — On-chain data source
-- **Telegram Bot API** — User interface
-- **Threading** — Background watchlist monitoring
-- **Dataclasses** — Type-safe signal modeling
+- Python 3.10+
+- Node.js 18+
+- AVE API key
+- Telegram bot token (only needed for bot/alert notifications)
 
-## 📁 Project Structure
+## Setup
 
-```
-skills/ave-accumulation-monitor/
-├── README.md                 # This file
-├── SKILL_V2.md              # Full technical documentation
-├── telegram_bot.py          # Production bot
-├── scripts/
-│   ├── ave_monitor.py       # Core analysis engine
-│   └── help.py              # Help documentation
-└── demo/
-    ├── demo_script.py       # Runnable demo
-    └── presentation.md      # Hackathon slides
-```
-
-## 🎮 Quick Start
-
-### Prerequisites
+### 1. Python dependencies
 
 ```bash
-export AVE_API_KEY="your-api-key"
-export TELEGRAM_BOT_TOKEN="your-bot-token"
+pip install -r requirements-chart.txt
+pip install fastapi uvicorn pydantic
 ```
 
-### Run Bot
+### 2. Frontend dependencies
 
 ```bash
-cd skills/ave-accumulation-monitor
-python3 telegram_bot.py
+cd frontend
+npm install
+cd ..
 ```
 
-### Run Demo
+### 3. Environment variables
 
-```bash
-python3 demo/demo_script.py
+Create a .env file in the project root:
+
+```env
+AVE_API_KEY=your_ave_api_key
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token
+API_BASE_URL=http://localhost:8000
 ```
 
-## 🌐 Web Dashboard (New)
+For frontend override (optional):
 
-A modern web dashboard is now included with a FastAPI backend and React frontend.
+```env
+VITE_API_BASE=http://localhost:8000
+```
 
-### 1) Set environment variables
+## Run
+
+### Option A: startup script
 
 Windows PowerShell:
 
 ```powershell
-$env:AVE_API_KEY="your-api-key"
+.\startup.ps1
 ```
 
 Linux/macOS:
 
 ```bash
-export AVE_API_KEY="your-api-key"
+bash startup.sh
 ```
 
-### 2) Run API backend
+### Option B: manual (3 terminals)
+
+Terminal 1 (API):
 
 ```bash
-python api_server.py
+python -m uvicorn api_server:app --host 0.0.0.0 --port 8000
 ```
 
-API will be available at `http://localhost:8000`.
+Terminal 2 (Telegram bot):
 
-### 3) Run frontend dashboard
+```bash
+python telegram_bot_advanced.py
+```
+
+Terminal 3 (Frontend):
 
 ```bash
 cd frontend
-npm install
-npm run dev
+npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-Dashboard will be available at `http://localhost:5173`.
+## CLI Usage
 
-## 🏆 Hackathon Judging Criteria
+Single token analysis:
 
-| Criteria                 | How We Address It                                      |
-| ------------------------ | ------------------------------------------------------ |
-| **Innovation**           | First tool to combine 8 signals with dynamic weighting |
-| **Technical Complexity** | Multi-threading, API integration, scoring algorithm    |
-| **Practical Use**        | Live bot with 100+ users, real trading decisions       |
-| **Presentation**         | Clear demo, working product, comprehensive docs        |
+```bash
+python scripts/ave_monitor.py --mode single --token SOL --chain solana
+```
 
-## 📈 Results & Metrics
+Sweep scan:
 
-- **Response time**: < 3 seconds per analysis
-- **Accuracy**: 73% of high-score tokens (≥60) showed 20%+ price movement within 48h
-- **Users**: 150+ active traders using the bot
-- **Chains supported**: 8 (Solana, ETH, BSC, Base, etc.)
+```bash
+python scripts/ave_monitor.py --mode sweep --category trending --chain solana --top 5
+```
 
-## 🔮 Future Roadmap
+JSON output:
 
-- [ ] Web dashboard with charts
-- [ ] Twitter/X sentiment integration
-- [ ] Automated paper trading
-- [ ] Multi-exchange arbitrage signals
-- [ ] Mobile app
+```bash
+python scripts/ave_monitor.py --mode single --token PEPE --chain ethereum --json
+```
 
-## 👥 Team
+## API Quick Reference
 
-- **Satya** — Lead Developer & Trader
-- OpenClaw AI — Code Assistant
+- GET /api/health
+- GET /api/chains
+- GET /api/analyze?token=SOL&chain=solana
+- GET /api/sweep?category=all&chain=solana&top=6
+- GET /api/prices/live?tokens=sol,jup,pepe&chain=solana
+- GET /api/trends/category-network?categories=trending,meme&chains=solana,base&top=5
+- GET /api/klines
+- GET /api/chart
+- POST /api/alerts/create
+- GET /api/alerts/user/{user_id}
+- GET /api/alerts/token/{token}
+- DELETE /api/alerts/{alert_id}
+- PUT /api/alerts/{alert_id}/toggle
+- GET /api/alerts/stats
 
-## 📜 License
+Open interactive docs at http://localhost:8000/docs after API is running.
 
-MIT — Open source, use at your own risk.
+## Telegram Commands
 
-**Not financial advice. DYOR.**
+```text
+/start
+/help
+/analyze SOL solana
+/sweep all solana
+/alert create SOL solana price above 150
+/alert list
+/alert delete <alert_id>
+/alert toggle <alert_id>
+/watchlist add SOL solana
+/watchlist list
+/watchlist remove SOL
+```
 
----
+## Notes
 
-Built with 🦞 OpenClaw for Hackathon 2026
+- Alerts are persisted in alerts.json.
+- Alert manager supports price/risk/volume/whale/trend types.
+- Current advanced bot worker actively evaluates price and risk alerts in its loop.
+
+## Additional Docs
+
+- QUICKSTART.md
+- MONITORING_GUIDE.md
+- ARCHITECTURE.md
+
+## Disclaimer
+
+This project is for research/monitoring purposes only and is not financial advice.
