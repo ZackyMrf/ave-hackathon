@@ -1,0 +1,16 @@
+[
+  {
+    "id": "1128697849_SOL_solana_price_1775663047",
+    "user_id": 1128697849,
+    "token": "SOL",
+    "chain": "solana",
+    "alert_type": "price",
+    "condition": "above",
+    "threshold": 150.0,
+    "enabled": true,
+    "created_at": "2026-04-08T22:44:07.298298",
+    "last_triggered": null,
+    "notify_telegram": true,
+    "notify_web": true
+  }
+]
