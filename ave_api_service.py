@@ -6,8 +6,11 @@ Connects to https://api.agacve.com/v3/tokens for live token monitoring
 
 import os
 import requests
+import logging
 from typing import Dict, List, Optional
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 class AveApiService:
     """Service untuk mengakses Ave API"""
@@ -46,7 +49,7 @@ class AveApiService:
             
             return None
         except requests.exceptions.RequestException as e:
-            print(f"❌ Ave API Error: {e}")
+            logger.debug(f"Ave API Error: {e}")
             return None
     
     def get_tokens_by_chain(self, chain: str = "bsc", limit: int = 50) -> List[Dict]:
@@ -78,7 +81,7 @@ class AveApiService:
             
             return []
         except requests.exceptions.RequestException as e:
-            print(f"❌ Ave API Error (tokens): {e}")
+            logger.debug(f"Ave API Error (tokens): {e}")
             return []
     
     def get_whale_movements(self, ca: str, chain: str = "bsc") -> List[Dict]:
@@ -100,7 +103,7 @@ class AveApiService:
             
             return data.get("data", [])
         except requests.exceptions.RequestException as e:
-            print(f"❌ Whale API Error: {e}")
+            logger.debug(f"Whale API Error: {e}")
             return []
     
     def get_holder_distribution(self, ca: str, chain: str = "bsc") -> Dict:
@@ -122,7 +125,7 @@ class AveApiService:
             
             return data.get("data", {})
         except requests.exceptions.RequestException as e:
-            print(f"❌ Holder API Error: {e}")
+            logger.debug(f"Holder API Error: {e}")
             return {}
     
     def _parse_token_data(self, raw_data: Dict, chain: str) -> Dict:

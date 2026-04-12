@@ -11,6 +11,8 @@ import requests
 import threading
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
+from urllib.parse import urlencode
+from urllib.parse import urlparse
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'scripts'))
 from ave_monitor import AveAccumulationMonitor
@@ -29,6 +31,7 @@ from alerts_manager import (
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 BASE_URL = f"https://api.telegram.org/bot{TOKEN}"
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+WEB_APP_URL = os.getenv("WEB_APP_URL") or os.getenv("FRONTEND_URL") or "http://localhost:5173"
 
 # Initialize
 ave_monitor = AveAccumulationMonitor()
@@ -47,6 +50,14 @@ COMMAND_ALERT = "/alert"
 COMMAND_WATCHLIST = "/watchlist"
 COMMAND_STATUS = "/status"
 COMMAND_SWEEP = "/sweep"
+
+
+def sync_alerts_from_storage():
+    """Sync alerts in memory with alerts.json written by API/web process."""
+    try:
+        alerts_manager.reload_alerts()
+    except Exception as e:
+        print(f"[bot] Alert sync failed: {e}")
 
 
 def send_message(chat_id: int, text: str, parse_mode: str = "Markdown", reply_markup=None):
@@ -80,6 +91,37 @@ def send_alert(chat_id: int, alert_type: str, message: str):
     
     text = f"{emoji} *ALERT*\n{message}"
     send_message(chat_id, text)
+
+
+def build_launch_web_markup(token: str = "", chain: str = "") -> Dict:
+    """Build Telegram inline keyboard with Launch Web button."""
+    base_url = str(WEB_APP_URL or "http://localhost:5173").strip()
+    parsed = urlparse(base_url)
+    host = str(parsed.hostname or "").strip().lower()
+
+    # Telegram can reject button URLs like localhost/0.0.0.0; skip button in that case.
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return {}
+    if host in {"localhost", "127.0.0.1", "0.0.0.0"}:
+        return {}
+
+    params = {}
+
+    token_value = str(token or "").strip()
+    chain_value = str(chain or "").strip()
+    if token_value:
+        params["token"] = token_value.upper()
+    if chain_value:
+        params["chain"] = chain_value.lower()
+
+    target_url = base_url
+    if params:
+        separator = "&" if "?" in base_url else "?"
+        target_url = f"{base_url}{separator}{urlencode(params)}"
+
+    return {
+        "inline_keyboard": [[{"text": "🚀 Launch Web", "url": target_url}]],
+    }
 
 
 def format_token_info(token: str, chain: str) -> str:
@@ -135,8 +177,51 @@ def format_token_info(token: str, chain: str) -> str:
         return f"❌ Error fetching data: {str(e)}"
 
 
-def handle_command_start(chat_id: int):
+def claim_deeplink_login(chat_id: int, code: str, chat_meta: Optional[Dict] = None) -> Dict[str, str]:
+    """Claim web deep-link login session in API backend."""
+    if not code:
+        return {"ok": "false", "detail": "Missing connect code"}
+
+    payload = {
+        "code": code,
+        "chat_id": int(chat_id),
+        "username": str((chat_meta or {}).get("username") or ""),
+        "first_name": str((chat_meta or {}).get("first_name") or ""),
+    }
+
+    try:
+        resp = requests.post(f"{API_BASE_URL}/api/telegram/deeplink/claim", json=payload, timeout=8)
+        data = resp.json() if resp.content else {}
+        if resp.ok and isinstance(data, dict) and data.get("success"):
+            return {"ok": "true", "detail": "Connected"}
+
+        detail = "Invalid login session"
+        if isinstance(data, dict):
+            detail = str(data.get("detail") or detail)
+        return {"ok": "false", "detail": detail}
+    except Exception as e:
+        return {"ok": "false", "detail": f"Claim failed: {e}"}
+
+
+def handle_command_start(chat_id: int, args: Optional[List[str]] = None, chat_meta: Optional[Dict] = None):
     """Handle /start command"""
+    args = args or []
+
+    if args and str(args[0]).startswith("connect_"):
+        code = str(args[0])[len("connect_"):].strip()
+        claimed = claim_deeplink_login(chat_id, code, chat_meta)
+        if claimed.get("ok") == "true":
+            send_message(
+                chat_id,
+                "✅ *Telegram Connected*\n"
+                "Your Telegram account is now linked to Ave Monitor web login."
+            )
+        else:
+            send_message(
+                chat_id,
+                f"⚠️ *Connect Failed*\n{claimed.get('detail', 'Invalid login session')}"
+            )
+
     lines = [
         "👋 *Ave Accumulation Monitor - Advanced Bot*",
         "",
@@ -199,7 +284,16 @@ def handle_command_analyze(chat_id: int, args: List[str]):
     send_message(chat_id, f"🔄 Analyzing {token} on {chain}...")
 
     info = format_token_info(token, chain)
-    send_message(chat_id, info)
+    if str(info).startswith("❌"):
+        send_message(chat_id, info)
+        return
+
+    markup = build_launch_web_markup(token, chain)
+    sent = send_message(chat_id, info, reply_markup=markup if markup else None)
+
+    # Fallback: if Telegram rejects button markup, still send analysis text.
+    if not isinstance(sent, dict) or not sent.get("ok"):
+        send_message(chat_id, info)
 
 
 def handle_command_sweep(chat_id: int, args: List[str]):
@@ -271,6 +365,7 @@ def handle_command_alert_create(chat_id: int, args: List[str]):
 
 def handle_command_alert_list(chat_id: int):
     """List user's alerts"""
+    sync_alerts_from_storage()
     alerts = alerts_manager.get_user_alerts(chat_id)
 
     if not alerts:
@@ -335,7 +430,7 @@ def handle_command_watchlist_list(chat_id: int):
     send_message(chat_id, "\n".join(lines))
 
 
-def handle_message(chat_id: int, message_text: str):
+def handle_message(chat_id: int, message_text: str, chat_meta: Optional[Dict] = None):
     """Route message to appropriate handler"""
     parts = message_text.strip().split()
     if not parts:
@@ -346,7 +441,7 @@ def handle_message(chat_id: int, message_text: str):
     args = parts[1:]
 
     if command == COMMAND_START:
-        handle_command_start(chat_id)
+        handle_command_start(chat_id, args, chat_meta)
     elif command == COMMAND_HELP:
         handle_command_help(chat_id)
     elif command == COMMAND_ANALYZE:
@@ -354,6 +449,7 @@ def handle_message(chat_id: int, message_text: str):
     elif command == COMMAND_SWEEP:
         handle_command_sweep(chat_id, args)
     elif command == COMMAND_ALERT:
+        sync_alerts_from_storage()
         if not args:
             send_message(chat_id, "Usage: `/alert create|list|delete|toggle`")
             return
@@ -441,9 +537,10 @@ def poll_updates():
                     msg = update["message"]
                     chat_id = msg["chat"]["id"]
                     text = msg.get("text", "")
+                    chat_meta = msg.get("chat", {})
 
                     print(f"[bot] User {chat_id}: {text}")
-                    handle_message(chat_id, text)
+                    handle_message(chat_id, text, chat_meta)
 
         except Exception as e:
             print(f"[bot] Poll error: {e}")
@@ -457,6 +554,9 @@ def run_monitoring_worker():
     while True:
         try:
             time.sleep(300)  # Check every 5 minutes
+
+            # Pull newest alerts created/updated by web API process.
+            sync_alerts_from_storage()
 
             # Iterate through all alerts
             for alert in alerts_manager.alerts.values():

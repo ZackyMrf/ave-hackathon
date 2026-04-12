@@ -25,6 +25,7 @@ BASE_URL = "https://prod.ave-api.com"  # Original Ave API endpoint
 # Used when API doesn't return real addresses - ONLY verified addresses here!
 TOKEN_ADDRESS_MAP = {
     # Solana - Verified contract addresses only
+    "jup-solana": "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",
     "bonk-solana": "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263",
     # TODO: Add other tokens when verified
 }
@@ -44,9 +45,23 @@ def _looks_like_address(value: Optional[str]) -> bool:
     v = str(value).strip()
     return len(v) >= 20 and " " not in v
 
+
+def _normalize_token_for_chain(token: str, chain: str) -> str:
+    """Accept both '<token>' and '<token>-<chain>' inputs."""
+    token_raw = str(token or "").strip()
+    chain_norm = str(chain or "").strip().lower()
+    if not token_raw:
+        return ""
+    if "-" in token_raw and chain_norm:
+        base, suffix = token_raw.rsplit("-", 1)
+        if base.strip() and suffix.strip().lower() == chain_norm:
+            return base.strip()
+    return token_raw
+
 @dataclass
 class TokenData:
     symbol: str
+    name: str
     address: str
     chain: str
     price: float
@@ -441,19 +456,51 @@ class AveAccumulationMonitor:
                 print(f"✅ Cached: {lookup_key} → {contract_addr}")
             return item
         return None
+
+    def _resolve_token_address(self, token_input: str, chain: str) -> Tuple[str, Optional[Dict]]:
+        """Resolve a contract address for token-id endpoints; never return symbol-only values."""
+        lookup_key = f"{token_input.lower()}-{chain.lower()}"
+
+        if _looks_like_address(token_input):
+            return token_input, None
+
+        if lookup_key in TOKEN_ADDRESS_MAP and _looks_like_address(TOKEN_ADDRESS_MAP[lookup_key]):
+            return TOKEN_ADDRESS_MAP[lookup_key], None
+
+        search_data = self._search_token(token_input, chain)
+        if isinstance(search_data, dict):
+            candidate = str(search_data.get("token") or search_data.get("address") or "").strip()
+            if _looks_like_address(candidate):
+                return candidate, search_data
+
+        return "", search_data
     
     def get_token_data(self, token: str, chain: str) -> Optional[TokenData]:
         """Fetch token data from Ave API"""
-        # Format: <token_address>-<chain> or search by keyword
-        # First try to search for token to get address
-        token_address = token  # Default fallback
-        search_data = self._search_token(token, chain)
-        if search_data:
-            token_address = search_data.get("token", search_data.get("address", token))
-        elif not _looks_like_address(token):
-            lookup_key = f"{token.lower()}-{chain.lower()}"
-            token_address = TOKEN_ADDRESS_MAP.get(lookup_key, token)
-        
+        token_input = _normalize_token_for_chain(token, chain)
+
+        lookup_key = f"{token_input.lower()}-{chain.lower()}"
+        token_address, search_data = self._resolve_token_address(token_input, chain)
+
+        # If we cannot resolve a contract address, avoid invalid /v2/tokens/<symbol>-<chain> calls.
+        if not token_address:
+            if not isinstance(search_data, dict):
+                return None
+
+            return TokenData(
+                symbol=str(search_data.get("symbol") or token_input).upper(),
+                name=str(search_data.get("name") or search_data.get("symbol") or token_input).strip(),
+                address=str(search_data.get("token") or search_data.get("address") or token_input),
+                chain=chain,
+                price=float(search_data.get("current_price_usd") or search_data.get("price") or 0),
+                price_change_24h=float(search_data.get("price_change_24h") or 0),
+                volume_24h=float(search_data.get("tx_volume_u_24h") or search_data.get("volume_24h") or 0),
+                tvl=float(search_data.get("tvl") or 0),
+                holders=int(search_data.get("holders") or 0),
+                market_cap=float(search_data.get("market_cap") or 0),
+                risk_score=int(search_data.get("riskScore") or search_data.get("risk_score") or 50),
+            )
+
         token_id = f"{token_address}-{chain}"
         data = self._make_request(f"/v2/tokens/{token_id}")
 
@@ -467,7 +514,6 @@ class AveAccumulationMonitor:
             return None
         
         # Extract address from multiple possible locations in response
-        lookup_key = f"{token.lower()}-{chain.lower()}"  # For TOKEN_ADDRESS_MAP lookup
         extracted_address = (
             search_data.get("token") if isinstance(search_data, dict) else None or
             data.get("address") or  # Direct address field
@@ -475,11 +521,17 @@ class AveAccumulationMonitor:
             data.get("ca") or  # Alternative field name
             TOKEN_ADDRESS_MAP.get(lookup_key) or  # Fallback to known token mapping
             token_address or  # Use what we found during search
-            token  # Final fallback to token symbol
+            token_input  # Final fallback to token symbol
         )
         
         return TokenData(
-            symbol=data["token"].get("symbol", token.upper()) if isinstance(data.get("token"), dict) else token.upper(),
+            symbol=data["token"].get("symbol", token_input.upper()) if isinstance(data.get("token"), dict) else token_input.upper(),
+            name=(
+                str(data.get("name") or "").strip()
+                or str(data.get("token", {}).get("name") or "").strip()
+                or str(search_data.get("name") if isinstance(search_data, dict) else "").strip()
+                or str(token_input).strip()
+            ),
             address=extracted_address,
             chain=chain,
             price=float(data.get("current_price_usd") or data.get("token", {}).get("current_price_usd") or 0),
@@ -493,12 +545,11 @@ class AveAccumulationMonitor:
     
     def get_whale_data(self, token: str, chain: str) -> List[WhaleData]:
         """Fetch top 25 holders from Ave API"""
-        # Get token address first
-        search_data = self._search_token(token, chain)
-        if search_data:
-            token_address = search_data.get("token", search_data.get("address", ""))
-        else:
-            token_address = token
+        token_input = _normalize_token_for_chain(token, chain)
+        token_address, _ = self._resolve_token_address(token_input, chain)
+        if not token_address:
+            return []
+
         token_id = f"{token_address}-{chain}"
         data = self._make_request(f"/v2/tokens/top100/{token_id}")
         
@@ -524,12 +575,11 @@ class AveAccumulationMonitor:
     
     def get_price_history(self, token: str, chain: str, days: int = 30) -> List[Dict]:
         """Fetch historical price/volume data from klines"""
-        # Get token address first
-        search_data = self._search_token(token, chain)
-        if search_data:
-            token_address = search_data.get("token", search_data.get("address", ""))
-        else:
-            token_address = token
+        token_input = _normalize_token_for_chain(token, chain)
+        token_address, _ = self._resolve_token_address(token_input, chain)
+        if not token_address:
+            return []
+
         token_id = f"{token_address}-{chain}"
         
         # Use klines endpoint - interval 1440 = 1 day
@@ -1031,6 +1081,7 @@ class AveAccumulationMonitor:
         # Build report
         report = {
             "token": token_data.symbol,
+            "name": token_data.name,
             "chain": chain,
             "address": token_data.address,
             "price": token_data.price,
@@ -1144,23 +1195,39 @@ class AveAccumulationMonitor:
     
     def sweep_scan(self, category: str, chain: str, top_n: int = 5) -> List[Dict]:
         """Mode B: Sweep scan across a chain with optional category filter."""
+        top_n = max(1, min(int(top_n), 20))
         category_norm = str(category or "all").strip().lower()
         is_network_wide = category_norm in {"", "all", "any", "network", "network-wide", "chain", "*"}
         scope_text = "network-wide" if is_network_wide else f"{category_norm} filter"
         print(f"🔍 Scanning {scope_text} on {chain}...")
 
         chain_fallback_tokens = {
-            "solana": ["SOL", "JUP", "RAY", "BONK", "WIF", "PYTH", "JTO"],
-            "ethereum": ["ETH", "UNI", "AAVE", "MKR", "LDO", "PEPE", "LINK"],
-            "bsc": ["BNB", "CAKE", "XVS", "BAKE", "TWT", "DOGE", "SHIB"],
-            "base": ["ETH", "AERO", "DEGEN", "BRETT", "USDC", "BALD"],
-            "arbitrum": ["ARB", "GMX", "RDNT", "MAGIC", "GRAIL", "ETH"],
-            "optimism": ["OP", "VELO", "SNX", "LYRA", "ETH", "USDC"],
-            "polygon": ["POL", "AAVE", "QUICK", "SUSHI", "GHST", "USDC"],
-            "avalanche": ["AVAX", "JOE", "PNG", "QI", "GMX", "USDC"],
+            "solana": ["SOL", "JUP", "RAY", "BONK", "WIF", "PYTH", "JTO", "RNDR", "JTO", "WEN", "POPCAT", "BOME"],
+            "ethereum": ["ETH", "UNI", "AAVE", "MKR", "LDO", "PEPE", "LINK", "ARB", "OP", "CRV", "SNX", "MATIC"],
+            "bsc": ["BNB", "CAKE", "XVS", "BAKE", "TWT", "DOGE", "SHIB", "FLOKI", "XRP", "ETH", "BTC", "USDT"],
+            "base": ["ETH", "AERO", "DEGEN", "BRETT", "USDC", "BALD", "TOSHI", "KEYCAT", "PRIME", "AAVE", "LINK", "UNI"],
+            "arbitrum": ["ARB", "GMX", "RDNT", "MAGIC", "GRAIL", "ETH", "LINK", "AAVE", "UNI", "USDC", "PENDLE", "WBTC"],
+            "optimism": ["OP", "VELO", "SNX", "LYRA", "ETH", "USDC", "AAVE", "LINK", "UNI", "WBTC", "PERP", "SUSD"],
+            "polygon": ["POL", "AAVE", "QUICK", "SUSHI", "GHST", "USDC", "WETH", "WBTC", "LINK", "CRV", "MKR", "BAL"],
+            "avalanche": ["AVAX", "JOE", "PNG", "QI", "GMX", "USDC", "WETH", "WBTC", "LINK", "AAVE", "UNI", "MIM"],
         }
 
-        candidates = self._fetch_sweep_candidates(category_norm, chain, limit=max(24, top_n * 8))
+        candidates = self._fetch_sweep_candidates(category_norm, chain, limit=max(60, top_n * 18))
+
+        if len(candidates) < max(top_n * 3, 30):
+            extra_candidates = self._fetch_chain_token_candidates(chain, limit=max(80, top_n * 24))
+            merged = []
+            seen_candidate_keys = set()
+            for cand in (candidates + extra_candidates):
+                symbol = str(cand.get("symbol", "")).strip().upper()
+                address = str(cand.get("address", "")).strip().lower()
+                key = address if _looks_like_address(address) else f"sym:{symbol}"
+                if not key or key in seen_candidate_keys:
+                    continue
+                seen_candidate_keys.add(key)
+                merged.append(cand)
+            candidates = merged
+
         if candidates:
             tokens = candidates
         else:
@@ -1168,15 +1235,79 @@ class AveAccumulationMonitor:
             tokens = [{"symbol": t, "address": "", "search_text": t.lower()} for t in fallback_symbols]
 
         # Analyze a rotating window so sweep results are not always the same.
-        max_scan = max(12, min(len(tokens), max(top_n * 4, top_n + 8)))
+        max_scan = max(24, min(len(tokens), max(top_n * 10, top_n + 24)))
         if tokens and len(tokens) > max_scan:
             rotate_by = int(time.time() // 300) % len(tokens)
             tokens = tokens[rotate_by:] + tokens[:rotate_by]
             tokens = tokens[:max_scan]
         
         results = []
-        seen_symbols = set()
-        seen_addresses = set()
+        scanned_queries = set()
+        seen_result_keys = set()
+
+        def build_heuristic_report(candidate: Dict, idx: int) -> Dict:
+            symbol = str(candidate.get("symbol") or candidate.get("name") or f"TOK{idx+1}").strip().upper()
+            address = str(candidate.get("address") or symbol).strip()
+            price = float(candidate.get("price", 0.0) or 0.0)
+            change_24h = float(candidate.get("price_change_24h", 0.0) or 0.0)
+            volume_24h = float(candidate.get("volume_24h", 0.0) or 0.0)
+            tvl = float(candidate.get("tvl", 0.0) or 0.0)
+            holders = int(candidate.get("holders", 0) or 0)
+            market_cap = float(candidate.get("market_cap", 0.0) or 0.0)
+            risk_raw = float(candidate.get("risk_score", 50) or 50)
+            risk_adjusted = max(5, min(95, int(100 - risk_raw)))
+            alert_level = "red" if risk_adjusted >= 75 else "orange" if risk_adjusted >= 55 else "yellow" if risk_adjusted >= 35 else "green"
+            phase = "bull" if change_24h > 2 else "bear" if change_24h < -2 else "consolidation"
+            vol_div = max(0, min(30, int(abs(change_24h) * 1.2 + (12 if volume_24h > 0 else 4))))
+            vol_mom = max(0, min(25, int(abs(change_24h) * 0.8 + 5)))
+            whale_score = max(0, min(40, int(20 + (50 - risk_raw) * 0.4)))
+
+            return {
+                "token": symbol,
+                "chain": chain,
+                "address": address,
+                "price": price,
+                "price_change_24h": change_24h,
+                "volume_24h": volume_24h,
+                "tvl": tvl,
+                "holders": holders,
+                "market_cap": market_cap,
+                "risk_score": int(risk_raw),
+                "score": {
+                    "total": risk_adjusted,
+                    "risk_adjusted": risk_adjusted,
+                    "confidence": 20,
+                    "alert_level": alert_level,
+                    "market_phase": phase,
+                },
+                "signals": {
+                    "volume_divergence": vol_div,
+                    "volume_momentum": vol_mom,
+                    "tvl_stability": max(0, min(20, int(10 + (tvl > 0) * 6))),
+                    "holder_distribution": max(0, min(15, int(6 + (holders > 0) * 4))),
+                    "tvl_confidence": max(0, min(10, int(3 + (tvl > 0) * 4))),
+                    "whale_score": whale_score,
+                    "anomaly_score": max(0, min(27, int(abs(change_24h) * 0.6 + 4))),
+                    "pattern_match": max(0, min(8, int(abs(change_24h) * 0.15 + 2))),
+                },
+                "descriptions": {
+                    "whale": "Heuristic fallback (API unavailable)",
+                    "anomaly": "Heuristic fallback (API unavailable)",
+                    "pattern": "Heuristic fallback (API unavailable)",
+                },
+                "whales": [],
+            }
+
+        def append_report_if_unique(report: Dict) -> bool:
+            symbol_key = str(report.get("token", "")).strip().upper()
+            address_key = str(report.get("address", "")).strip().lower()
+            dedupe_key = address_key if _looks_like_address(address_key) else f"sym:{symbol_key}"
+            if not dedupe_key or dedupe_key in seen_result_keys:
+                return False
+            seen_result_keys.add(dedupe_key)
+            results.append(report)
+            return True
+
         for item in tokens:
             try:
                 symbol = str(item.get("symbol", "")).strip().upper()
@@ -1185,27 +1316,73 @@ class AveAccumulationMonitor:
                 if not token_query:
                     continue
 
+                query_key = token_query.strip().lower()
+                if query_key in scanned_queries:
+                    continue
+                scanned_queries.add(query_key)
+
                 report = self.analyze_single_token(token_query, chain)
                 if "error" not in report:
-                    symbol_key = str(report.get("token", "")).strip().upper()
-                    address_key = str(report.get("address", "")).strip().lower()
+                    if append_report_if_unique(report) and len(results) >= top_n:
+                        break
 
-                    # Avoid repeated wrong/duplicate contracts in sweep output.
-                    if symbol_key and symbol_key in seen_symbols:
-                        continue
-                    if address_key and address_key in seen_addresses:
-                        continue
-
-                    if symbol_key:
-                        seen_symbols.add(symbol_key)
-                    if _looks_like_address(address_key):
-                        seen_addresses.add(address_key)
-
-                    results.append(report)
-                time.sleep(0.5)  # Rate limiting
+                time.sleep(0.25)  # Rate limiting
             except Exception as e:
                 print(f"  ⚠️ Error analyzing {item}: {e}")
                 continue
+
+        if len(results) < top_n:
+            fallback_symbols = chain_fallback_tokens.get(chain.lower(), chain_fallback_tokens["solana"])
+            for symbol in fallback_symbols:
+                if len(results) >= top_n:
+                    break
+                query_key = symbol.strip().lower()
+                if query_key in scanned_queries:
+                    continue
+                scanned_queries.add(query_key)
+                try:
+                    report = self.analyze_single_token(symbol, chain)
+                    if "error" in report:
+                        continue
+
+                    append_report_if_unique(report)
+                except Exception as e:
+                    print(f"  ⚠️ Fallback analyze error {symbol}: {e}")
+                time.sleep(0.2)
+
+        # Final recovery pass: try remaining candidate symbols regardless of previous query ordering.
+        if len(results) < top_n:
+            for item in tokens:
+                if len(results) >= top_n:
+                    break
+                symbol = str(item.get("symbol", "")).strip().upper()
+                if not symbol:
+                    continue
+                query_key = f"sym-retry:{symbol.lower()}"
+                if query_key in scanned_queries:
+                    continue
+                scanned_queries.add(query_key)
+                try:
+                    report = self.analyze_single_token(symbol, chain)
+                    if "error" in report:
+                        continue
+                    append_report_if_unique(report)
+                except Exception:
+                    continue
+                time.sleep(0.12)
+
+        # Strict-top fallback: synthesize rows from candidate pool if API still doesn't provide enough reports.
+        if len(results) < top_n:
+            for idx, item in enumerate(tokens):
+                if len(results) >= top_n:
+                    break
+                if not isinstance(item, dict):
+                    continue
+                try:
+                    heuristic = build_heuristic_report(item, idx)
+                    append_report_if_unique(heuristic)
+                except Exception:
+                    continue
         
         # Sort by risk-adjusted score
         results.sort(key=lambda x: x["score"]["risk_adjusted"], reverse=True)

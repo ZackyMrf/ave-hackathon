@@ -50,26 +50,50 @@ class AlertsManager:
 
     def __init__(self, alerts_file: str = "alerts.json", telegram_token: str = ""):
         self.alerts_file = alerts_file
-        self.telegram_token = telegram_token
-        self.telegram_base_url = f"https://api.telegram.org/bot{telegram_token}"
+        self.telegram_token = ""
+        self.telegram_base_url = ""
         self.alerts: Dict[str, Alert] = {}
         self.monitored_prices: Dict[str, float] = {}  # token-chain -> last_price
         self.monitored_risks: Dict[str, float] = {}   # token-chain -> last_risk_score
         self.lock = threading.Lock()
 
+        self.set_telegram_token(telegram_token)
+
         self._load_alerts()
+
+    @staticmethod
+    def _normalize_token(raw: str) -> str:
+        token = str(raw or "").strip()
+        if len(token) >= 2 and ((token[0] == '"' and token[-1] == '"') or (token[0] == "'" and token[-1] == "'")):
+            token = token[1:-1].strip()
+        return token
+
+    def set_telegram_token(self, telegram_token: str):
+        """Update Telegram token and derived API base URL."""
+        token = self._normalize_token(telegram_token)
+        self.telegram_token = token
+        self.telegram_base_url = f"https://api.telegram.org/bot{token}" if token else ""
 
     def _load_alerts(self):
         """Load alerts from persistent storage"""
+        loaded_alerts: Dict[str, Alert] = {}
         try:
             if os.path.exists(self.alerts_file):
                 with open(self.alerts_file, "r") as f:
                     data = json.load(f)
                     for alert_data in data:
                         alert = Alert(**alert_data)
-                        self.alerts[alert.id] = alert
+                        loaded_alerts[alert.id] = alert
         except Exception as e:
             print(f"[AlertsManager] Error loading alerts: {e}")
+
+        # Replace in-memory alerts so deletions/updates from other processes are reflected.
+        self.alerts = loaded_alerts
+
+    def reload_alerts(self):
+        """Reload alerts from disk to keep multiple processes synchronized."""
+        with self.lock:
+            self._load_alerts()
 
     def _save_alerts(self):
         """Persist alerts to storage"""
@@ -88,6 +112,8 @@ class AlertsManager:
         alert_type: str,
         condition: str,
         threshold: float,
+        notify_telegram: bool = True,
+        notify_web: bool = True,
     ) -> Alert:
         """Create new alert"""
         alert_id = f"{user_id}_{token}_{chain}_{alert_type}_{int(time.time())}"
@@ -101,6 +127,8 @@ class AlertsManager:
             threshold=threshold,
             enabled=True,
             created_at=datetime.now().isoformat(),
+            notify_telegram=notify_telegram,
+            notify_web=notify_web,
         )
 
         with self.lock:
