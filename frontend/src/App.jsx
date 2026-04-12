@@ -1,359 +1,32 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { LightChartViewer } from './TradingViewChart';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import LandingScreen from './components/LandingScreen';
+import PlatformTopNav from './components/PlatformTopNav';
+import DashboardSection from './components/sections/DashboardSection';
+import SignalEngineSection from './components/sections/SignalEngineSection';
+import WhaleFeedSection from './components/sections/WhaleFeedSection';
+import RiskMatrixSection from './components/sections/RiskMatrixSection';
+import { CHAINS, SIGNAL_PRESETS } from './constants/monitoring';
+import {
+  buildPairCacheKey,
+  buildTrendCacheKey,
+  buildTrendSnapshotFromKlines,
+  getIntervalMinutes,
+  getRiskTier,
+  normalizeKlinePoints,
+} from './utils/monitoring';
+import { useMonitoringFetchActions } from './hooks/useMonitoringFetchActions';
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:8000';
 const PAIR_CACHE_KEY = 'ave_pair_cache_v1';
-
-const CHAINS = ['solana', 'ethereum', 'bsc', 'base', 'arbitrum', 'optimism', 'polygon', 'avalanche'];
-
-function buildPairCacheKey(tokenAddress, chain) {
-  const addr = String(tokenAddress || '').trim().toLowerCase();
-  const ch = String(chain || '').trim().toLowerCase();
-  if (!addr || !ch) return '';
-  return `${addr}-${ch}`;
-}
-
-function getIntervalMinutes(days) {
-  return days <= 7 ? 60 : days <= 30 ? 120 : 240;
-}
-
-function formatMoney(value) {
-  if (value === null || value === undefined || Number.isNaN(Number(value))) return '-';
-  const n = Number(value);
-  if (Math.abs(n) >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
-  if (Math.abs(n) >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
-  if (Math.abs(n) >= 1_000) return `$${(n / 1_000).toFixed(2)}K`;
-  return `$${n.toFixed(4)}`;
-}
-
-function scoreTone(score) {
-  if (score >= 75) return 'tone-red';
-  if (score >= 55) return 'tone-orange';
-  if (score >= 35) return 'tone-yellow';
-  return 'tone-green';
-}
-
-function buildTrendCacheKey(item, chain) {
-  const addr = String(item?.address || item?.ca || '').trim().toLowerCase();
-  const tok = String(item?.token || '').trim().toLowerCase();
-  const ch = String(chain || '').trim().toLowerCase();
-  if (!ch) return '';
-  if (addr) return `${addr}-${ch}`;
-  if (tok) return `${tok}-${ch}`;
-  return '';
-}
-
-function normalizeKlinePoints(points = []) {
-  return (points || [])
-    .map((p) => {
-      const tRaw = Number(p.time);
-      const t = tRaw > 10_000_000_000 ? Math.floor(tRaw / 1000) : Math.floor(tRaw);
-      const open = Number(p.open);
-      const high = Number(p.high);
-      const low = Number(p.low);
-      const close = Number(p.close);
-      const volume = Number(p.volume || 0);
-      return { time: t, open, high, low, close, volume };
-    })
-    .filter(
-      (p) =>
-        Number.isFinite(p.time) &&
-        p.time > 0 &&
-        Number.isFinite(p.open) &&
-        Number.isFinite(p.high) &&
-        Number.isFinite(p.low) &&
-        Number.isFinite(p.close) &&
-        p.high >= p.low
-    )
-    .sort((a, b) => a.time - b.time);
-}
-
-function buildTrendSnapshotFromKlines(validPoints = []) {
-  if (!validPoints.length) return null;
-
-  const latest = validPoints[validPoints.length - 1];
-  const latestClose = Number(latest.close);
-  const cutoff = Number(latest.time) - 24 * 60 * 60;
-
-  let basePoint = validPoints[0];
-  for (let i = validPoints.length - 1; i >= 0; i -= 1) {
-    if (Number(validPoints[i].time) <= cutoff) {
-      basePoint = validPoints[i];
-      break;
-    }
-  }
-
-  const baseClose = Number(basePoint?.close || 0);
-  const change24h = baseClose > 0 ? ((latestClose - baseClose) / baseClose) * 100 : 0;
-  const sparkline = validPoints.slice(-24).map((p) => Number(p.close));
-
-  return {
-    latestClose,
-    change24h,
-    sparkline,
-    updatedAt: Date.now(),
-    latestTime: latest.time,
-  };
-}
-
-function Sparkline({ points = [] }) {
-  if (!points.length) return <div className="spark-empty">no trend</div>;
-  const max = Math.max(...points);
-  const min = Math.min(...points);
-  const range = max - min || 1;
-  const d = points
-    .map((p, i) => {
-      const x = (i / (points.length - 1 || 1)) * 100;
-      const y = 38 - ((p - min) / range) * 32;
-      return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`;
-    })
-    .join(' ');
-
-  return (
-    <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="sparkline" aria-hidden="true">
-      <defs>
-        <linearGradient id="sparkFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="rgba(71, 240, 255, 0.5)" />
-          <stop offset="100%" stopColor="rgba(71, 240, 255, 0)" />
-        </linearGradient>
-      </defs>
-      <path d={`${d} L 100 40 L 0 40 Z`} fill="url(#sparkFill)" />
-      <path d={d} fill="none" stroke="#4bf0ff" strokeWidth="1.4" />
-    </svg>
-  );
-}
-
-function buildSMA(values, period) {
-  const out = new Array(values.length).fill(null);
-  if (period <= 1) return values;
-  let sum = 0;
-  for (let i = 0; i < values.length; i += 1) {
-    sum += values[i];
-    if (i >= period) sum -= values[i - period];
-    if (i >= period - 1) out[i] = sum / period;
-  }
-  return out;
-}
-
-function buildEMA(values, period) {
-  const out = new Array(values.length).fill(null);
-  if (!values.length) return out;
-  const k = 2 / (period + 1);
-  let ema = values[0];
-  for (let i = 0; i < values.length; i += 1) {
-    ema = i === 0 ? values[0] : values[i] * k + ema * (1 - k);
-    if (i >= period - 1) out[i] = ema;
-  }
-  return out;
-}
-
-function buildLinePath(series, xOf, yOf) {
-  let started = false;
-  const segments = [];
-  for (let i = 0; i < series.length; i += 1) {
-    const v = series[i];
-    if (v === null || v === undefined || Number.isNaN(v)) continue;
-    const cmd = started ? 'L' : 'M';
-    started = true;
-    segments.push(`${cmd} ${xOf(i).toFixed(2)} ${yOf(v).toFixed(2)}`);
-  }
-  return segments.join(' ');
-}
-
-function TradingChart({ data, chartType, showMA, showEMA }) {
-  const [hoverIndex, setHoverIndex] = useState(-1);
-  if (!data.length) return <p className="empty-note">No chart data.</p>;
-
-  const highs = data.map((d) => d.high);
-  const lows = data.map((d) => d.low);
-  const closes = data.map((d) => d.close);
-  const volumes = data.map((d) => d.volume || 0);
-  const max = Math.max(...highs);
-  const min = Math.min(...lows);
-  const range = max - min || 1;
-  const maxVolume = Math.max(...volumes, 1);
-
-  const yOf = (v) => 95 - ((v - min) / range) * 90;
-  const xOf = (idx) => 4 + (idx / (data.length - 1 || 1)) * 92;
-  const yVol = (v) => 94 - (v / maxVolume) * 88;
-
-  const ma20 = buildSMA(closes, 20);
-  const ema20 = buildEMA(closes, 20);
-  const maPath = showMA ? buildLinePath(ma20, xOf, yOf) : '';
-  const emaPath = showEMA ? buildLinePath(ema20, xOf, yOf) : '';
-
-  const safeHover = hoverIndex >= 0 && hoverIndex < data.length ? hoverIndex : -1;
-  const hoverCandle = safeHover >= 0 ? data[safeHover] : null;
-  const hoverX = safeHover >= 0 ? xOf(safeHover) : null;
-  const hoverY = safeHover >= 0 ? yOf(data[safeHover].close) : null;
-
-  if (chartType === 'line' || chartType === 'area') {
-    const linePath = data
-      .map((d, i) => `${i === 0 ? 'M' : 'L'} ${xOf(i).toFixed(2)} ${yOf(d.close).toFixed(2)}`)
-      .join(' ');
-    const areaPath = `${linePath} L 96 95 L 4 95 Z`;
-
-    return (
-      <div className="tv-chart-stack">
-        <div className="tv-main-wrap">
-          <svg
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-            className="tv-chart-svg"
-            onMouseMove={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              const relX = (e.clientX - rect.left) / rect.width;
-              const idx = Math.round(relX * (data.length - 1));
-              setHoverIndex(Math.max(0, Math.min(data.length - 1, idx)));
-            }}
-            onMouseLeave={() => setHoverIndex(-1)}
-          >
-            <defs>
-              <linearGradient id="tvArea" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="rgba(75,240,255,0.45)" />
-                <stop offset="100%" stopColor="rgba(75,240,255,0)" />
-              </linearGradient>
-            </defs>
-            {chartType === 'area' ? <path d={areaPath} fill="url(#tvArea)" /> : null}
-            <path d={linePath} fill="none" stroke="#66e6ff" strokeWidth="0.8" />
-            {showMA && maPath ? <path d={maPath} fill="none" stroke="#ffd166" strokeWidth="0.52" /> : null}
-            {showEMA && emaPath ? <path d={emaPath} fill="none" stroke="#b388ff" strokeWidth="0.52" /> : null}
-            {safeHover >= 0 ? (
-              <>
-                <line x1={hoverX} y1="4" x2={hoverX} y2="96" stroke="rgba(200,225,255,0.5)" strokeWidth="0.2" />
-                <line x1="4" y1={hoverY} x2="96" y2={hoverY} stroke="rgba(200,225,255,0.32)" strokeWidth="0.2" />
-              </>
-            ) : null}
-          </svg>
-          {hoverCandle ? (
-            <div className="tv-tooltip">
-              <span>O {hoverCandle.open.toFixed(6)}</span>
-              <span>H {hoverCandle.high.toFixed(6)}</span>
-              <span>L {hoverCandle.low.toFixed(6)}</span>
-              <span>C {hoverCandle.close.toFixed(6)}</span>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="tv-volume-wrap">
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="tv-volume-svg">
-            {data.map((d, i) => {
-              const x = xOf(i);
-              const w = Math.max(0.2, Math.min(1.1, 70 / Math.max(data.length, 1)));
-              const y = yVol(d.volume || 0);
-              const bullish = d.close >= d.open;
-              return (
-                <rect
-                  key={`v-${d.time}-${i}`}
-                  x={x - w / 2}
-                  y={y}
-                  width={w}
-                  height={94 - y}
-                  fill={bullish ? 'rgba(62,255,181,0.55)' : 'rgba(255,95,132,0.55)'}
-                />
-              );
-            })}
-          </svg>
-        </div>
-      </div>
-    );
-  }
-
-  const candleWidth = Math.max(0.28, Math.min(1.1, 70 / Math.max(data.length, 1)));
-
-  return (
-    <div className="tv-chart-stack">
-      <div className="tv-main-wrap">
-        <svg
-          viewBox="0 0 100 100"
-          preserveAspectRatio="none"
-          className="tv-chart-svg"
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const relX = (e.clientX - rect.left) / rect.width;
-            const idx = Math.round(relX * (data.length - 1));
-            setHoverIndex(Math.max(0, Math.min(data.length - 1, idx)));
-          }}
-          onMouseLeave={() => setHoverIndex(-1)}
-        >
-          {data.map((d, i) => {
-            const x = xOf(i);
-            const yOpen = yOf(d.open);
-            const yClose = yOf(d.close);
-            const yHigh = yOf(d.high);
-            const yLow = yOf(d.low);
-            const bullish = d.close >= d.open;
-            const top = Math.min(yOpen, yClose);
-            const height = Math.max(0.7, Math.abs(yOpen - yClose));
-            return (
-              <g key={`${d.time}-${i}`}>
-                <line
-                  x1={x}
-                  y1={yHigh}
-                  x2={x}
-                  y2={yLow}
-                  stroke={bullish ? '#3effb5' : '#ff5f84'}
-                  strokeWidth="0.22"
-                />
-                <rect
-                  x={x - candleWidth / 2}
-                  y={top}
-                  width={candleWidth}
-                  height={height}
-                  fill={bullish ? 'rgba(62,255,181,0.8)' : 'rgba(255,95,132,0.85)'}
-                  stroke={bullish ? '#3effb5' : '#ff5f84'}
-                  strokeWidth="0.08"
-                />
-              </g>
-            );
-          })}
-          {showMA && maPath ? <path d={maPath} fill="none" stroke="#ffd166" strokeWidth="0.52" /> : null}
-          {showEMA && emaPath ? <path d={emaPath} fill="none" stroke="#b388ff" strokeWidth="0.52" /> : null}
-          {safeHover >= 0 ? (
-            <>
-              <line x1={hoverX} y1="4" x2={hoverX} y2="96" stroke="rgba(200,225,255,0.5)" strokeWidth="0.2" />
-              <line x1="4" y1={hoverY} x2="96" y2={hoverY} stroke="rgba(200,225,255,0.32)" strokeWidth="0.2" />
-            </>
-          ) : null}
-        </svg>
-        {hoverCandle ? (
-          <div className="tv-tooltip">
-            <span>O {hoverCandle.open.toFixed(6)}</span>
-            <span>H {hoverCandle.high.toFixed(6)}</span>
-            <span>L {hoverCandle.low.toFixed(6)}</span>
-            <span>C {hoverCandle.close.toFixed(6)}</span>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="tv-volume-wrap">
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="tv-volume-svg">
-          {data.map((d, i) => {
-            const x = xOf(i);
-            const w = Math.max(0.2, Math.min(1.1, 70 / Math.max(data.length, 1)));
-            const y = yVol(d.volume || 0);
-            const bullish = d.close >= d.open;
-            return (
-              <rect
-                key={`v-${d.time}-${i}`}
-                x={x - w / 2}
-                y={y}
-                width={w}
-                height={94 - y}
-                fill={bullish ? 'rgba(62,255,181,0.55)' : 'rgba(255,95,132,0.55)'}
-              />
-            );
-          })}
-        </svg>
-      </div>
-    </div>
-  );
-}
+const TELEGRAM_CHAT_ID_KEY = 'ave_telegram_chat_id_v1';
+const WATCHLIST_STORAGE_KEY = 'ave_watchlist_v1';
 
 export default function App() {
   const [token, setToken] = useState('jup');
+  const [tokenSearchMode, setTokenSearchMode] = useState('symbol');
   const [chain, setChain] = useState('solana');
-  const [category, setCategory] = useState('all');
+  const [sweepChain, setSweepChain] = useState('solana');
+  const [category, setCategory] = useState('trending');
   const [top, setTop] = useState(6);
 
   const [report, setReport] = useState(null);
@@ -366,19 +39,89 @@ export default function App() {
   const [selectedPairAddress, setSelectedPairAddress] = useState('');
   const [selectedTokenAddress, setSelectedTokenAddress] = useState('');
   const [selectedRowKey, setSelectedRowKey] = useState('');
+  const [selectedChartChain, setSelectedChartChain] = useState('solana');
   const [chartData, setChartData] = useState([]);
   const [chartLoading, setChartLoading] = useState(false);
   const [chartError, setChartError] = useState('');
   const [timeframe, setTimeframe] = useState(30);
-  const [chartType, setChartType] = useState('candlestick');
   const [showMA, setShowMA] = useState(true);
   const [showEMA, setShowEMA] = useState(true);
   const [alerts, setAlerts] = useState([]);
   const [alertsTab, setAlertsTab] = useState('create');
   const [alertsStats, setAlertsStats] = useState({ total: 0, enabled: 0, monitored_tokens: 0, by_type: {} });
-  const userId = 1; // Mock user ID - replace with actual user context
+  const [enginePreset, setEnginePreset] = useState('Swing');
+  const [engineMinRisk, setEngineMinRisk] = useState(55);
+  const [engineMinWhale, setEngineMinWhale] = useState(12);
+  const [engineRequireUptrend, setEngineRequireUptrend] = useState(false);
+  const [whaleToken, setWhaleToken] = useState('jup');
+  const [whaleChain, setWhaleChain] = useState('solana');
+  const [whaleLoading, setWhaleLoading] = useState(false);
+  const [whaleError, setWhaleError] = useState('');
+  const [whaleReport, setWhaleReport] = useState(null);
+  const [selectedWhaleWallet, setSelectedWhaleWallet] = useState('');
+  const [whaleWalletHistory, setWhaleWalletHistory] = useState({});
+  const [sweepLoading, setSweepLoading] = useState(false);
+  const [showHome, setShowHome] = useState(true);
+  const [telegramChatIdInput, setTelegramChatIdInput] = useState(() => {
+    try {
+      return window.localStorage.getItem(TELEGRAM_CHAT_ID_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
+  const [telegramStatus, setTelegramStatus] = useState({
+    tokenConfigured: false,
+    botReachable: false,
+    botUsername: '',
+  });
+  const [telegramActionLoading, setTelegramActionLoading] = useState(false);
+  const [telegramConnection, setTelegramConnection] = useState({
+    checked: false,
+    userConnected: false,
+    detail: '',
+    chatType: '',
+    chatDisplay: '',
+    username: '',
+    firstName: '',
+    profilePhotoUrl: '',
+  });
+  const [telegramDeepLink, setTelegramDeepLink] = useState({
+    code: '',
+    url: '',
+    status: 'idle',
+    detail: '',
+    expiresAt: 0,
+  });
+  const [telegramMenuOpen, setTelegramMenuOpen] = useState(false);
+  const [telegramMenuAlerts, setTelegramMenuAlerts] = useState([]);
+  const [telegramMenuAlertsLoading, setTelegramMenuAlertsLoading] = useState(false);
+  const [telegramMenuWatchlist, setTelegramMenuWatchlist] = useState([]);
+
+  const parsedTelegramChatId = Number.parseInt(String(telegramChatIdInput || '').trim(), 10);
+  const hasValidTelegramChatId = Number.isInteger(parsedTelegramChatId) && parsedTelegramChatId !== 0;
+  const telegramConnected = Boolean(telegramConnection.userConnected && hasValidTelegramChatId);
+  const telegramAvatarFallback = String(
+    telegramConnection.firstName || telegramConnection.username || telegramConnection.chatDisplay || 'TG'
+  )
+    .trim()
+    .slice(0, 2)
+    .toUpperCase();
   const sweepRef = useRef([]);
   const pairCacheRef = useRef({});
+  const mainPaneRef = useRef(null);
+  const sweepAbortControllerRef = useRef(null);
+  const telegramDeepLinkPollRef = useRef(null);
+
+  function stopTelegramDeepLinkPolling() {
+    if (telegramDeepLinkPollRef.current) {
+      window.clearInterval(telegramDeepLinkPollRef.current);
+      telegramDeepLinkPollRef.current = null;
+    }
+  }
+
+  useEffect(() => () => {
+    stopTelegramDeepLinkPolling();
+  }, []);
 
   useEffect(() => {
     try {
@@ -388,6 +131,298 @@ export default function App() {
       pairCacheRef.current = {};
     }
   }, []);
+
+  useEffect(() => {
+    loadTelegramMenuWatchlist();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const nextValue = String(telegramChatIdInput || '').trim();
+      if (nextValue) {
+        window.localStorage.setItem(TELEGRAM_CHAT_ID_KEY, nextValue);
+      } else {
+        window.localStorage.removeItem(TELEGRAM_CHAT_ID_KEY);
+      }
+    } catch {
+      // Ignore storage write failures.
+    }
+  }, [telegramChatIdInput]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadTelegramStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/api/telegram/status`);
+        const payload = await res.json();
+        if (!res.ok) throw new Error(payload.detail || 'Failed to load Telegram status');
+        if (ignore) return;
+        setTelegramStatus({
+          tokenConfigured: Boolean(payload.token_configured),
+          botReachable: Boolean(payload.bot_reachable),
+          botUsername: String(payload.bot_username || ''),
+        });
+      } catch (err) {
+        if (ignore) return;
+        console.error('Error loading Telegram status:', err);
+        setTelegramStatus({ tokenConfigured: false, botReachable: false, botUsername: '' });
+      }
+    }
+
+    loadTelegramStatus();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  async function refreshTelegramStatus() {
+    try {
+      const res = await fetch(`${API_BASE}/api/telegram/status`);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail || 'Failed to load Telegram status');
+      const next = {
+        tokenConfigured: Boolean(payload.token_configured),
+        botReachable: Boolean(payload.bot_reachable),
+        botUsername: String(payload.bot_username || ''),
+      };
+      setTelegramStatus(next);
+      return next;
+    } catch (err) {
+      console.error('Error refreshing Telegram status:', err);
+      const fallback = { tokenConfigured: false, botReachable: false, botUsername: '' };
+      setTelegramStatus(fallback);
+      return fallback;
+    }
+  }
+
+  useEffect(() => {
+    if (!telegramStatus.tokenConfigured || !hasValidTelegramChatId) return;
+    checkTelegramUserConnection(parsedTelegramChatId);
+  }, [telegramStatus.tokenConfigured, hasValidTelegramChatId, parsedTelegramChatId]);
+
+  useEffect(() => {
+    if (!telegramConnected && telegramMenuOpen) {
+      setTelegramMenuOpen(false);
+    }
+  }, [telegramConnected, telegramMenuOpen]);
+
+  useEffect(() => {
+    if (!telegramMenuOpen || !telegramConnected || !hasValidTelegramChatId) return;
+    loadTelegramMenuAlerts(parsedTelegramChatId);
+    loadTelegramMenuWatchlist();
+  }, [telegramMenuOpen, telegramConnected, hasValidTelegramChatId, parsedTelegramChatId]);
+
+  async function checkTelegramUserConnection(chatIdValue = parsedTelegramChatId) {
+    if (!Number.isInteger(chatIdValue) || chatIdValue === 0) {
+      setTelegramConnection({
+        checked: false,
+        userConnected: false,
+        detail: 'Invalid chat ID',
+        chatType: '',
+        chatDisplay: '',
+        username: '',
+        firstName: '',
+        profilePhotoUrl: '',
+      });
+      return null;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/telegram/connection?chat_id=${chatIdValue}`);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail || 'Failed to check Telegram connection');
+
+      const next = {
+        checked: true,
+        userConnected: Boolean(payload.user_connected),
+        detail: String(payload.detail || ''),
+        chatType: String(payload.chat_type || ''),
+        chatDisplay: String(payload.chat_display || ''),
+        username: String(payload.username || ''),
+        firstName: String(payload.first_name || ''),
+        profilePhotoUrl: String(payload.profile_photo_url || ''),
+      };
+      setTelegramConnection(next);
+      return payload;
+    } catch (err) {
+      setTelegramConnection({
+        checked: true,
+        userConnected: false,
+        detail: String(err?.message || 'Failed to check Telegram connection'),
+        chatType: '',
+        chatDisplay: '',
+        username: '',
+        firstName: '',
+        profilePhotoUrl: '',
+      });
+      return null;
+    }
+  }
+
+  async function pollTelegramDeepLinkSession(codeValue) {
+    const code = String(codeValue || '').trim();
+    if (!code) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/telegram/deeplink/session/${encodeURIComponent(code)}`);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail || 'Failed to poll Telegram login status');
+
+      if (payload.expired) {
+        setTelegramDeepLink((prev) => ({
+          ...prev,
+          status: 'expired',
+          detail: 'Login session expired. Generate a new Telegram link.',
+        }));
+        stopTelegramDeepLinkPolling();
+        return;
+      }
+
+      if (payload.claimed && payload.chat_id) {
+        const claimedChatId = Number.parseInt(String(payload.chat_id), 10);
+        if (Number.isInteger(claimedChatId)) {
+          setTelegramChatIdInput(String(claimedChatId));
+          await checkTelegramUserConnection(claimedChatId);
+          setStatus(`✅ Telegram linked to chat ${claimedChatId}`);
+        }
+
+        const displayName = String(payload.first_name || payload.username || '').trim();
+        setTelegramDeepLink((prev) => ({
+          ...prev,
+          status: 'claimed',
+          detail: displayName ? `Connected as ${displayName}` : 'Connected',
+        }));
+        stopTelegramDeepLinkPolling();
+        return;
+      }
+
+      setTelegramDeepLink((prev) => ({
+        ...prev,
+        status: 'waiting',
+        detail: 'Waiting for /start confirmation from Telegram...',
+      }));
+    } catch (err) {
+      setTelegramDeepLink((prev) => ({
+        ...prev,
+        status: 'error',
+        detail: String(err?.message || 'Failed to poll Telegram login status'),
+      }));
+      stopTelegramDeepLinkPolling();
+    }
+  }
+
+  async function startTelegramDeepLinkLogin() {
+    setTelegramActionLoading(true);
+    try {
+      const latestStatus = await refreshTelegramStatus();
+      if (!latestStatus.tokenConfigured || !latestStatus.botReachable) {
+        setError('Bot token belum siap atau bot belum reachable.');
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/api/telegram/deeplink/session`, {
+        method: 'POST',
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail || 'Failed to create Telegram login link');
+
+      const deepLink = String(payload.deep_link || '').trim();
+      const code = String(payload.code || '').trim();
+      const expiresAt = Number(payload.expires_at || 0);
+
+      if (!deepLink || !code) {
+        throw new Error('Invalid Telegram deep-link payload');
+      }
+
+      setTelegramDeepLink({
+        code,
+        url: deepLink,
+        status: 'waiting',
+        detail: 'Open link and press Start in Telegram bot.',
+        expiresAt,
+      });
+      setError('');
+      setStatus('Open Telegram link, then press Start to complete login.');
+
+      window.open(deepLink, '_blank', 'noopener,noreferrer');
+
+      stopTelegramDeepLinkPolling();
+      await pollTelegramDeepLinkSession(code);
+      telegramDeepLinkPollRef.current = window.setInterval(() => {
+        pollTelegramDeepLinkSession(code);
+      }, 2500);
+    } catch (err) {
+      setTelegramDeepLink({
+        code: '',
+        url: '',
+        status: 'error',
+        detail: String(err?.message || 'Failed to create Telegram deep-link'),
+        expiresAt: 0,
+      });
+      setError(`Telegram login link failed: ${err.message}`);
+    } finally {
+      setTelegramActionLoading(false);
+    }
+  }
+
+  function disconnectTelegram() {
+    stopTelegramDeepLinkPolling();
+    setTelegramChatIdInput('');
+    setTelegramConnection({
+      checked: false,
+      userConnected: false,
+      detail: '',
+      chatType: '',
+      chatDisplay: '',
+      username: '',
+      firstName: '',
+      profilePhotoUrl: '',
+    });
+    setTelegramDeepLink({
+      code: '',
+      url: '',
+      status: 'idle',
+      detail: '',
+      expiresAt: 0,
+    });
+    setError('');
+    setStatus('Telegram disconnected');
+    setTelegramMenuOpen(false);
+    setTelegramMenuAlerts([]);
+    setTelegramMenuWatchlist([]);
+  }
+
+  async function loadTelegramMenuAlerts(chatIdValue = parsedTelegramChatId) {
+    if (!Number.isInteger(chatIdValue) || chatIdValue === 0) {
+      setTelegramMenuAlerts([]);
+      return;
+    }
+
+    setTelegramMenuAlertsLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/alerts/user/${chatIdValue}`);
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail || 'Failed to load user alerts');
+      setTelegramMenuAlerts(Array.isArray(payload.alerts) ? payload.alerts : []);
+    } catch (err) {
+      console.error('Telegram menu alerts load failed:', err);
+      setTelegramMenuAlerts([]);
+    } finally {
+      setTelegramMenuAlertsLoading(false);
+    }
+  }
+
+  function loadTelegramMenuWatchlist() {
+    try {
+      const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      setTelegramMenuWatchlist(Array.isArray(parsed) ? parsed : []);
+    } catch (err) {
+      console.error('Telegram menu watchlist load failed:', err);
+      setTelegramMenuWatchlist([]);
+    }
+  }
 
   function cachePairAddress(tokenAddr, chainName, pairAddr) {
     const key = buildPairCacheKey(tokenAddr, chainName);
@@ -413,24 +448,128 @@ export default function App() {
     return String(pairCacheRef.current[key] || '');
   }
 
-  const sectionRefs = {
-    Dashboard: useRef(null),
-    Assets: useRef(null),
-    'Signal Engine': useRef(null),
-    'Whale Feed': useRef(null),
-    'Risk Matrix': useRef(null),
-  };
-
-  const navItems = ['Dashboard', 'Assets', 'Signal Engine', 'Whale Feed', 'Risk Matrix'];
-
-  const watchlistMock = useMemo(
+  const navItems = useMemo(
     () => [
-      { symbol: 'JUP', amount: '$7,689.00', chain: 'solana' },
-      { symbol: 'AVAX', amount: '$1,340.00', chain: 'avalanche' },
-      { symbol: 'MATIC', amount: '$540.00', chain: 'polygon' },
-      { symbol: 'SEI', amount: '$980.00', chain: 'solana' },
+      { key: 'Dashboard', label: 'Dashboard' },
+      { key: 'Signal Engine', label: 'Signal Engine' },
+      { key: 'Whale Feed', label: 'Whale Feed' },
+      { key: 'Risk Matrix', label: 'Risk Matrix' },
     ],
     []
+  );
+
+  const signalKpis = useMemo(() => {
+    const total = sweep.length;
+    const highConviction = sweep.filter((item) => Number(item?.score?.risk_adjusted || 0) >= 75).length;
+    const withTrend = sweep.filter((item) => {
+      const key = buildTrendCacheKey(item, sweepChain);
+      return Boolean(key && trendCache[key]);
+    }).length;
+    const latestRisk = Number(report?.score?.risk_adjusted || 0);
+
+    return {
+      total,
+      highConviction,
+      withTrend,
+      latestRisk,
+    };
+  }, [sweep, trendCache, sweepChain, report]);
+
+  const signalEngineRows = useMemo(() => {
+    const minRisk = Number(engineMinRisk || 0);
+    const minWhale = Number(engineMinWhale || 0);
+
+    return (sweep || [])
+      .map((item, idx) => {
+        const riskAdj = Number(item?.score?.risk_adjusted || 0);
+        const whaleScore = Number(item?.signals?.whale_score || 0);
+        const trendKey = buildTrendCacheKey(item, sweepChain);
+        const trend = Number(trendCache[trendKey]?.change24h ?? item?.price_change_24h ?? 0);
+        const passTrend = engineRequireUptrend ? trend > 0 : true;
+        const passed = riskAdj >= minRisk && whaleScore >= minWhale && passTrend;
+        const action = passed && riskAdj >= 75 && whaleScore >= 20 ? 'TRIGGER' : passed ? 'WATCH' : 'IGNORE';
+
+        return {
+          id: `sig-${idx}`,
+          token: String(item?.token || '-').toUpperCase(),
+          riskAdj,
+          whaleScore,
+          trend,
+          action,
+          passed,
+        };
+      })
+      .filter((row) => row.passed)
+      .sort((a, b) => (b.riskAdj + b.whaleScore) - (a.riskAdj + a.whaleScore))
+      .slice(0, 20);
+  }, [sweep, sweepChain, trendCache, engineMinRisk, engineMinWhale, engineRequireUptrend]);
+
+  const whaleFeedRows = useMemo(() => {
+    const whales = Array.isArray(whaleReport?.whales) ? whaleReport.whales : [];
+    return whales.slice(0, 20).map((w, idx) => ({
+      id: `wf-${idx}`,
+      address: String(w.address || '').trim(),
+      ratio: Number(w.balance_ratio || 0),
+      delta: Number(w.change_24h || 0),
+      isNew: Boolean(w.is_new),
+    }));
+  }, [whaleReport]);
+
+  const selectedWhaleTimeline = useMemo(() => {
+    const key = String(selectedWhaleWallet || '').trim().toLowerCase();
+    if (!key) return [];
+    const rows = Array.isArray(whaleWalletHistory[key]) ? whaleWalletHistory[key] : [];
+    return [...rows].sort((a, b) => Number(b.capturedAt || 0) - Number(a.capturedAt || 0)).slice(0, 30);
+  }, [selectedWhaleWallet, whaleWalletHistory]);
+
+  const riskRows = useMemo(() => {
+    if (sweep.length) {
+      return sweep.slice(0, 12).map((item, idx) => {
+        const riskAdj = Number(item?.score?.risk_adjusted || 0);
+        return {
+          id: `risk-${idx}`,
+          token: String(item?.token || '-').toUpperCase(),
+          riskAdj,
+          tier: getRiskTier(riskAdj),
+          whaleScore: Number(item?.signals?.whale_score || 0),
+          volDiv: Number(item?.signals?.volume_divergence || 0),
+        };
+      });
+    }
+
+    if (report?.token) {
+      const riskAdj = Number(report?.score?.risk_adjusted || 0);
+      return [
+        {
+          id: 'risk-single',
+          token: String(report.token).toUpperCase(),
+          riskAdj,
+          tier: getRiskTier(riskAdj),
+          whaleScore: Number(report?.signals?.whale_score || 0),
+          volDiv: Number(report?.signals?.volume_divergence || 0),
+        },
+      ];
+    }
+
+    return [];
+  }, [sweep, report]);
+
+  const riskSummary = useMemo(() => {
+    const summary = { high: 0, elevated: 0, watch: 0, low: 0 };
+    for (const row of riskRows) {
+      summary[row.tier] = (summary[row.tier] || 0) + 1;
+    }
+    return summary;
+  }, [riskRows]);
+
+  const homeMetrics = useMemo(
+    () => ({
+      tracked: sweep.length,
+      enabledAlerts: Number(alertsStats?.enabled || 0),
+      chains: CHAINS.length,
+      lastRisk: Number(report?.score?.risk_adjusted || 0),
+    }),
+    [sweep.length, alertsStats, report]
   );
 
   useEffect(() => {
@@ -456,7 +595,7 @@ export default function App() {
       try {
         const query = new URLSearchParams({
           tokens: tokenList.join(','),
-          chain: String(chain),
+          chain: String(sweepChain),
         });
         const res = await fetch(`${API_BASE}/api/prices/live?${query.toString()}`);
         const payload = await res.json();
@@ -477,17 +616,6 @@ export default function App() {
           })
         );
 
-        setReport((prev) => {
-          if (!prev) return prev;
-          const key = String(prev.token || token || '').toLowerCase();
-          const quote = quotes[key];
-          if (!quote) return prev;
-          return {
-            ...prev,
-            price: Number(quote.price ?? prev.price),
-            price_change_24h: Number(quote.price_change_24h ?? prev.price_change_24h),
-          };
-        });
       } catch (err) {
         console.error('Live price update error:', err);
       }
@@ -500,22 +628,7 @@ export default function App() {
       disposed = true;
       window.clearInterval(intervalId);
     };
-  }, [chain, sweep.length, token]);
-
-  async function analyzeToken() {
-    setStatus('Analyzing token...');
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/api/analyze?token=${encodeURIComponent(token)}&chain=${encodeURIComponent(chain)}`);
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.detail || 'Analyze failed');
-      setReport(payload);
-      setStatus(`Analysis complete for ${payload.token?.toUpperCase?.() || token.toUpperCase()}`);
-    } catch (err) {
-      setError(err.message);
-      setStatus('Analysis failed');
-    }
-  }
+  }, [sweepChain, sweep.length]);
 
   async function syncSweepWithChartKlines(items, chainName) {
     const rows = Array.isArray(items) ? items.slice(0, 20) : [];
@@ -575,27 +688,92 @@ export default function App() {
     }
   }
 
-  async function runSweep() {
-    const scopeLabel = category === 'all' ? `${chain} network-wide` : `${chain} (${category} filter)`;
-    setStatus(`Running sweep: ${scopeLabel}...`);
-    setError('');
+  const { analyzeToken, runSweep, runWhaleFeedAnalysis } = useMonitoringFetchActions({
+    API_BASE,
+    token,
+    tokenSearchMode,
+    chain,
+    sweepChain,
+    category,
+    top,
+    whaleToken,
+    whaleChain,
+    selectedWhaleWallet,
+    setTop,
+    setStatus,
+    setError,
+    setReport,
+    setSweep,
+    setSweepLoading,
+    setWhaleLoading,
+    setWhaleError,
+    setWhaleReport,
+    setWhaleWalletHistory,
+    setSelectedWhaleWallet,
+    sweepAbortControllerRef,
+    syncSweepWithChartKlines,
+  });
+
+  // Alert Management Functions
+  async function saveTelegramSettings() {
+    if (!hasValidTelegramChatId) {
+      setError('Telegram Chat ID belum valid. Kirim /start ke bot dulu, lalu isi ID chat numerik.');
+      return;
+    }
+
+    setTelegramActionLoading(true);
     try {
-      const res = await fetch(
-        `${API_BASE}/api/sweep?category=${encodeURIComponent(category)}&chain=${encodeURIComponent(chain)}&top=${top}`
-      );
-      const payload = await res.json();
-      if (!res.ok) throw new Error(payload.detail || 'Sweep failed');
-      const results = payload.results || [];
-      setSweep(results);
-      syncSweepWithChartKlines(results, chain);
-      setStatus(`Sweep complete (${scopeLabel}): ${(payload.results || []).length} assets`);
+      const latestStatus = await refreshTelegramStatus();
+      if (!latestStatus.tokenConfigured) {
+        setError('TELEGRAM_BOT_TOKEN belum diset di backend.');
+        return;
+      }
+
+      const checked = await checkTelegramUserConnection(parsedTelegramChatId);
+      setError('');
+      if (checked?.user_connected) {
+        setStatus(`✅ Telegram connected: ${parsedTelegramChatId}`);
+      } else {
+        setStatus(`⚠️ Chat ID tersimpan, tapi bot belum bisa akses chat ${parsedTelegramChatId}. Kirim /start ke bot lalu cek lagi.`);
+      }
     } catch (err) {
-      setError(err.message);
-      setStatus('Sweep failed');
+      setError(`Telegram check failed: ${err.message}`);
+    } finally {
+      setTelegramActionLoading(false);
     }
   }
 
-  // Alert Management Functions
+  async function sendTelegramTestMessage() {
+    if (!hasValidTelegramChatId) {
+      setError('Isi Telegram Chat ID dulu sebelum kirim test message.');
+      return;
+    }
+
+    const latestStatus = await refreshTelegramStatus();
+    if (!latestStatus.tokenConfigured) {
+      setError('TELEGRAM_BOT_TOKEN belum diset di backend.');
+      return;
+    }
+
+    setTelegramActionLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/telegram/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: parsedTelegramChatId }),
+      });
+      const payload = await res.json();
+      if (!res.ok) throw new Error(payload.detail || 'Telegram test failed');
+      await checkTelegramUserConnection(parsedTelegramChatId);
+      setError('');
+      setStatus(`✅ Test message sent to chat ${parsedTelegramChatId}`);
+    } catch (err) {
+      setError(`Telegram test failed: ${err.message}`);
+    } finally {
+      setTelegramActionLoading(false);
+    }
+  }
+
   async function loadTokenAlerts(tok, cn) {
     try {
       const res = await fetch(`${API_BASE}/api/alerts/token/${tok}?chain=${cn}`);
@@ -619,11 +797,15 @@ export default function App() {
 
   async function createAlert(alertData) {
     try {
+      if (!hasValidTelegramChatId) {
+        throw new Error('Set Telegram Chat ID dulu di panel Telegram Settings');
+      }
+
       const res = await fetch(`${API_BASE}/api/alerts/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: userId,
+          user_id: parsedTelegramChatId,
           ...alertData,
           notify_telegram: true,
           notify_web: true,
@@ -633,8 +815,10 @@ export default function App() {
       await loadTokenAlerts(alertData.token, alertData.chain);
       await loadAlertsStats();
       setStatus('✅ Alert created successfully');
+      return true;
     } catch (err) {
       setError(`Alert creation failed: ${err.message}`);
+      return false;
     }
   }
 
@@ -645,9 +829,17 @@ export default function App() {
       await loadTokenAlerts(token, chain);
       await loadAlertsStats();
       setStatus('✅ Alert deleted');
+      return true;
     } catch (err) {
       setError(`Delete failed: ${err.message}`);
+      return false;
     }
+  }
+
+  async function deleteAlertFromTelegramMenu(alertId) {
+    const ok = await deleteAlert(alertId);
+    if (!ok) return;
+    await loadTelegramMenuAlerts(parsedTelegramChatId);
   }
 
   async function toggleAlert(alertId, enabled) {
@@ -666,9 +858,112 @@ export default function App() {
     }
   }
 
+  function addToWatchlist(item) {
+    const tokenValue = String(item?.token || '').trim().toUpperCase();
+    const chainValue = String(item?.chain || '').trim().toLowerCase();
+    const addressValue = String(item?.address || '').trim();
+
+    if (!tokenValue || !chainValue) {
+      setError('Data watchlist tidak valid.');
+      return false;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const current = Array.isArray(parsed) ? parsed : [];
+
+      const exists = current.some(
+        (w) => String(w?.token || '').toUpperCase() === tokenValue
+          && String(w?.chain || '').toLowerCase() === chainValue
+      );
+
+      if (exists) {
+        setStatus(`⚠️ ${tokenValue} sudah ada di watchlist ${chainValue}.`);
+        return true;
+      }
+
+      const next = [
+        ...current,
+        {
+          token: tokenValue,
+          chain: chainValue,
+          address: addressValue,
+          added_at: new Date().toISOString(),
+        },
+      ];
+
+      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(next));
+      setTelegramMenuWatchlist(next);
+      setStatus(`✅ ${tokenValue} added to watchlist (${chainValue}).`);
+      return true;
+    } catch (err) {
+      setError(`Watchlist save failed: ${err.message}`);
+      return false;
+    }
+  }
+
+  function removeFromWatchlist(item) {
+    const tokenValue = String(item?.token || '').trim().toUpperCase();
+    const chainValue = String(item?.chain || '').trim().toLowerCase();
+
+    if (!tokenValue || !chainValue) {
+      setError('Data watchlist tidak valid.');
+      return false;
+    }
+
+    try {
+      const raw = window.localStorage.getItem(WATCHLIST_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      const current = Array.isArray(parsed) ? parsed : [];
+      const next = current.filter(
+        (w) => !(
+          String(w?.token || '').toUpperCase() === tokenValue
+          && String(w?.chain || '').toLowerCase() === chainValue
+        )
+      );
+
+      window.localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(next));
+      setTelegramMenuWatchlist(next);
+      setStatus(`✅ ${tokenValue} removed from watchlist (${chainValue}).`);
+      return true;
+    } catch (err) {
+      setError(`Watchlist delete failed: ${err.message}`);
+      return false;
+    }
+  }
+
+  function isTokenInWatchlist(item) {
+    const tokenValue = String(item?.token || '').trim().toUpperCase();
+    const chainValue = String(item?.chain || '').trim().toLowerCase();
+    if (!tokenValue || !chainValue) return false;
+
+    return telegramMenuWatchlist.some(
+      (w) => String(w?.token || '').toUpperCase() === tokenValue
+        && String(w?.chain || '').toLowerCase() === chainValue
+    );
+  }
+
+  function toggleWatchlist(item) {
+    if (isTokenInWatchlist(item)) {
+      return removeFromWatchlist(item);
+    }
+    return addToWatchlist(item);
+  }
+
   function handleNavigate(label) {
+    setShowHome(false);
     setActiveNav(label);
-    sectionRefs[label]?.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    mainPaneRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function applySignalPreset(name) {
+    const preset = SIGNAL_PRESETS[name];
+    if (!preset) return;
+    setEnginePreset(name);
+    setEngineMinRisk(preset.minRisk);
+    setEngineMinWhale(preset.minWhale);
+    setEngineRequireUptrend(preset.uptrendOnly);
   }
 
   async function openTokenChart(item, rowKey) {
@@ -686,9 +981,11 @@ export default function App() {
 
     setSelectedRowKey(rowKey);
     setSelectedToken(item.token);
+    const activeSweepChain = String(sweepChain || 'solana');
+    setSelectedChartChain(activeSweepChain);
     const tokenAddress = item.address || item.ca || '';
     setSelectedTokenAddress(String(tokenAddress || ''));
-    const cachedPair = getCachedPairAddress(tokenAddress, chain);
+    const cachedPair = getCachedPairAddress(tokenAddress, activeSweepChain);
     const pairAddress = item.pair_address || item.pair || item.pair_id || cachedPair || '';
     setSelectedPairAddress(pairAddress);
     if (!pairAddress) {
@@ -700,7 +997,7 @@ export default function App() {
       const interval = getIntervalMinutes(timeframe);
       const query = new URLSearchParams({
         token: String(item.token),
-        chain: String(chain),
+        chain: activeSweepChain,
         days: String(timeframe),
         interval: String(interval),
         strict_live: 'true',
@@ -719,7 +1016,7 @@ export default function App() {
       const resolvedPairAddress = String(payload.pair_address || pairAddress || '');
       if (resolvedPairAddress) {
         setSelectedPairAddress(resolvedPairAddress);
-        cachePairAddress(payload.token_address || tokenAddress, chain, resolvedPairAddress);
+        cachePairAddress(payload.token_address || tokenAddress, activeSweepChain, resolvedPairAddress);
       }
 
       const resolvedTokenAddress = String(payload.token_address || tokenAddress || '');
@@ -748,7 +1045,7 @@ export default function App() {
               address: resolvedTokenAddress || tokenAddress,
               ca: resolvedTokenAddress || tokenAddress,
             },
-            chain
+            activeSweepChain
           );
           if (snapshot && trendKey) {
             setTrendCache((prev) => ({ ...prev, [trendKey]: snapshot }));
@@ -779,7 +1076,7 @@ export default function App() {
       const interval = getIntervalMinutes(nextDays);
       const query = new URLSearchParams({
         token: String(selectedToken),
-        chain: String(chain),
+        chain: String(selectedChartChain),
         days: String(nextDays),
         interval: String(interval),
         strict_live: 'true',
@@ -798,7 +1095,7 @@ export default function App() {
       const resolvedPairAddress = String(payload.pair_address || selectedPairAddress || '');
       if (resolvedPairAddress) {
         setSelectedPairAddress(resolvedPairAddress);
-        cachePairAddress(payload.token_address || selectedTokenAddress, chain, resolvedPairAddress);
+        cachePairAddress(payload.token_address || selectedTokenAddress, selectedChartChain, resolvedPairAddress);
       }
 
       const resolvedTokenAddress = String(payload.token_address || selectedTokenAddress || '');
@@ -827,7 +1124,7 @@ export default function App() {
               address: resolvedTokenAddress || selectedTokenAddress,
               ca: resolvedTokenAddress || selectedTokenAddress,
             },
-            chain
+            selectedChartChain
           );
           if (snapshot && trendKey) {
             setTrendCache((prev) => ({ ...prev, [trendKey]: snapshot }));
@@ -847,357 +1144,165 @@ export default function App() {
     }
   }
 
+  if (showHome) {
+    return (
+      <LandingScreen
+        status={status}
+        metrics={homeMetrics}
+        apiBase={API_BASE}
+        onEnterDashboard={() => handleNavigate('Dashboard')}
+        onRunQuickSweep={() => {
+          handleNavigate('Dashboard');
+          runSweep();
+        }}
+        onOpenNav={(navLabel) => handleNavigate(navLabel)}
+        token={token}
+        setToken={setToken}
+        tokenSearchMode={tokenSearchMode}
+        setTokenSearchMode={setTokenSearchMode}
+        chain={chain}
+        setChain={setChain}
+        onAnalyzeToken={analyzeToken}
+        report={report}
+        analysisError={error}
+        setStatus={setStatus}
+        refreshTelegramStatus={refreshTelegramStatus}
+        telegramChatIdInput={telegramChatIdInput}
+        setTelegramChatIdInput={setTelegramChatIdInput}
+        telegramTokenConfigured={telegramStatus.tokenConfigured}
+        telegramBotReachable={telegramStatus.botReachable}
+        telegramBotUsername={telegramStatus.botUsername}
+        startTelegramDeepLinkLogin={startTelegramDeepLinkLogin}
+        telegramDeepLinkUrl={telegramDeepLink.url}
+        telegramDeepLinkStatus={telegramDeepLink.status}
+        telegramDeepLinkDetail={telegramDeepLink.detail}
+        saveTelegramSettings={saveTelegramSettings}
+        sendTelegramTestMessage={sendTelegramTestMessage}
+        telegramActionLoading={telegramActionLoading}
+        telegramConnectionChecked={telegramConnection.checked}
+        telegramUserConnected={telegramConnection.userConnected}
+        telegramConnectionDetail={telegramConnection.detail}
+        telegramConnectionChatType={telegramConnection.chatType}
+        telegramConnectionChatDisplay={telegramConnection.chatDisplay}
+        telegramConnectionUsername={telegramConnection.username}
+        telegramConnectionFirstName={telegramConnection.firstName}
+        telegramConnectionProfilePhotoUrl={telegramConnection.profilePhotoUrl}
+        disconnectTelegram={disconnectTelegram}
+      />
+    );
+  }
+
   return (
-    <div className="page-shell">
+    <div className="app-shell">
       <div className="bg-grid" />
-      <aside className="left-rail">
-        <div className="brand">Ave Claw</div>
-        <div className="rail-section">Navigation</div>
-        {navItems.map((item) => (
-          <button
-            key={item}
-            className={`nav-item ${activeNav === item ? 'active' : ''}`}
-            onClick={() => handleNavigate(item)}
-          >
-            {item}
-          </button>
-        ))}
+      <PlatformTopNav
+        activeItem={activeNav}
+        sectionItems={navItems}
+        onGoHome={() => setShowHome(true)}
+        onSelect={handleNavigate}
+        secondaryActionLabel="Home"
+        onSecondaryAction={() => setShowHome(true)}
+        primaryActionLabel={telegramActionLoading ? 'Connecting...' : 'Connect Telegram'}
+        onPrimaryAction={startTelegramDeepLinkLogin}
+        primaryConnected={telegramConnected}
+        primaryAvatarUrl={telegramConnection.profilePhotoUrl}
+        primaryAvatarFallback={telegramAvatarFallback}
+        primaryAvatarTitle={telegramConnection.chatDisplay || 'Connected Telegram'}
+        primaryMenuOpen={telegramMenuOpen}
+        onPrimaryToggleMenu={() => setTelegramMenuOpen((prev) => !prev)}
+        primaryAlerts={telegramMenuAlerts}
+        primaryAlertsLoading={telegramMenuAlertsLoading}
+        primaryWatchlist={telegramMenuWatchlist}
+        onPrimaryDeleteAlert={deleteAlertFromTelegramMenu}
+        onPrimaryDeleteWatchlist={removeFromWatchlist}
+        onPrimaryDisconnect={disconnectTelegram}
+      />
 
-        <div className="rail-section margin-top">Active Tracking</div>
-        <div className="watchlist-stack">
-          {watchlistMock.map((item) => (
-            <div key={item.symbol} className="watch-item">
-              <div>
-                <strong>{item.symbol}</strong>
-                <p>{item.chain}</p>
-              </div>
-              <span>{item.amount}</span>
-            </div>
-          ))}
-        </div>
-      </aside>
+      <main className="app-main-pane" ref={mainPaneRef}>
+        <div className="app-status-pill">Engine: {status}</div>
 
-      <main className="main-pane">
-        <header className="topbar">
-          <div>
-            <h1>Accumulation Command Center</h1>
-            <p>Detect quiet smart-money accumulation before market ignition.</p>
-          </div>
-          <div className="status-pill">{status}</div>
-        </header>
+        {activeNav === 'Dashboard' ? (
+          <DashboardSection
+            token={token}
+            setToken={setToken}
+            tokenSearchMode={tokenSearchMode}
+            setTokenSearchMode={setTokenSearchMode}
+            chain={chain}
+            setChain={setChain}
+            analyzeToken={analyzeToken}
+            report={report}
+            setStatus={setStatus}
+            category={category}
+            setCategory={setCategory}
+            sweepChain={sweepChain}
+            setSweepChain={setSweepChain}
+            top={top}
+            setTop={setTop}
+            sweepLoading={sweepLoading}
+            runSweep={runSweep}
+            signalKpis={signalKpis}
+            sweep={sweep}
+            trendCache={trendCache}
+            openTokenChart={openTokenChart}
+            selectedRowKey={selectedRowKey}
+            timeframe={timeframe}
+            reloadChartForTimeframe={reloadChartForTimeframe}
+            showMA={showMA}
+            setShowMA={setShowMA}
+            showEMA={showEMA}
+            setShowEMA={setShowEMA}
+            chartError={chartError}
+            chartData={chartData}
+            selectedToken={selectedToken}
+            selectedChartChain={selectedChartChain}
+            selectedPairAddress={selectedPairAddress}
+            selectedTokenAddress={selectedTokenAddress}
+            setSelectedPairAddress={setSelectedPairAddress}
+            cachePairAddress={cachePairAddress}
+            createAlert={createAlert}
+            addToWatchlist={addToWatchlist}
+            toggleWatchlist={toggleWatchlist}
+            isTokenInWatchlist={isTokenInWatchlist}
+          />
+        ) : null}
 
-        <section className="hero-grid" ref={sectionRefs.Dashboard}>
-          <article className="glass card analyze-card">
-            <h2>Single Token Probe</h2>
-            <div className="control-grid">
-              <label>
-                Token
-                <input value={token} onChange={(e) => setToken(e.target.value)} placeholder="jup" />
-              </label>
-              <label>
-                Chain
-                <select value={chain} onChange={(e) => setChain(e.target.value)}>
-                  {CHAINS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <button onClick={analyzeToken} className="btn-primary">Analyze Now</button>
+        {activeNav === 'Signal Engine' ? (
+          <SignalEngineSection
+            signalEngineRows={signalEngineRows}
+            enginePreset={enginePreset}
+            applySignalPreset={applySignalPreset}
+            engineMinRisk={engineMinRisk}
+            setEngineMinRisk={setEngineMinRisk}
+            engineMinWhale={engineMinWhale}
+            setEngineMinWhale={setEngineMinWhale}
+            engineRequireUptrend={engineRequireUptrend}
+            setEngineRequireUptrend={setEngineRequireUptrend}
+            setEnginePreset={setEnginePreset}
+            runSweep={runSweep}
+            handleNavigate={handleNavigate}
+          />
+        ) : null}
 
-            {report ? (
-              <div className="report-grid">
-                <div className="metric-box">
-                  <span>Price</span>
-                  <strong>{formatMoney(report.price)}</strong>
-                </div>
-                <div className="metric-box">
-                  <span>24h Move</span>
-                  <strong>{Number(report.price_change_24h || 0).toFixed(2)}%</strong>
-                </div>
-                <div className="metric-box">
-                  <span>TVL</span>
-                  <strong>{formatMoney(report.tvl)}</strong>
-                </div>
-                <div className="metric-box">
-                  <span>Holders</span>
-                  <strong>{Number(report.holders || 0).toLocaleString()}</strong>
-                </div>
-                <div style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
-                  <button
-                    className="btn-trade"
-                    style={{ width: '100%', padding: '8px 12px' }}
-                    onClick={() => {
-                      const ca = report.address || report.ca || token;
-                      window.open(`https://pro.ave.ai/token/${ca}-${chain}`, '_blank');
-                    }}
-                  >
-                    🚀 Trade on Ave
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="empty-note">Run one token to fill this panel.</p>
-            )}
-          </article>
+        {activeNav === 'Whale Feed' ? (
+          <WhaleFeedSection
+            whaleFeedRows={whaleFeedRows}
+            whaleToken={whaleToken}
+            setWhaleToken={setWhaleToken}
+            whaleChain={whaleChain}
+            setWhaleChain={setWhaleChain}
+            runWhaleFeedAnalysis={runWhaleFeedAnalysis}
+            whaleLoading={whaleLoading}
+            whaleError={whaleError}
+            selectedWhaleWallet={selectedWhaleWallet}
+            setSelectedWhaleWallet={setSelectedWhaleWallet}
+            whaleReport={whaleReport}
+            selectedWhaleTimeline={selectedWhaleTimeline}
+          />
+        ) : null}
 
-          <article className="glass card score-card">
-            <h2>Risk-Adjusted Score</h2>
-            {report ? (
-              <>
-                <div className={`score-orb ${scoreTone(report.score?.risk_adjusted || 0)}`}>
-                  {report.score?.risk_adjusted || 0}
-                </div>
-                <p className="phase-line">Market phase: {(report.score?.market_phase || '-').toUpperCase()}</p>
-                <div className="signal-list">
-                  <div><span>Volume Divergence</span><b>{report.signals?.volume_divergence ?? '-'}</b></div>
-                  <div><span>Volume Momentum</span><b>{report.signals?.volume_momentum ?? '-'}</b></div>
-                  <div><span>TVL Stability</span><b>{report.signals?.tvl_stability ?? '-'}</b></div>
-                  <div><span>Holder Distribution</span><b>{report.signals?.holder_distribution ?? '-'}</b></div>
-                  <div><span>Whale Score</span><b>{report.signals?.whale_score ?? '-'}</b></div>
-                </div>
-              </>
-            ) : (
-              <p className="empty-note">No score yet.</p>
-            )}
-          </article>
-
-          <article className="glass card action-card">
-            <h2>Market Sweep</h2>
-            <div className="control-grid single">
-              <label>
-                Category Filter
-                <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                  <option value="all">all (network-wide)</option>
-                  <option value="trending">trending</option>
-                  <option value="meme">meme</option>
-                  <option value="defi">defi</option>
-                  <option value="gaming">gaming</option>
-                  <option value="ai">ai</option>
-                </select>
-              </label>
-              <label>
-                Top
-                <input
-                  value={top}
-                  onChange={(e) => setTop(Number(e.target.value || 1))}
-                  min={1}
-                  max={20}
-                  type="number"
-                />
-              </label>
-            </div>
-            <button onClick={runSweep} className="btn-ghost">Run Sweep</button>
-            <p className="helper">Sweep scans the selected chain first; category is optional and acts as a soft filter.</p>
-          </article>
-        </section>
-
-        <section className="glass table-section" ref={sectionRefs.Assets}>
-          <div className="table-header">
-            <h2>Top Signal Candidates</h2>
-            <span>{sweep.length} assets</span>
-          </div>
-
-          {sweep.length ? (
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Token</th>
-                    <th>Price</th>
-                    <th>24h</th>
-                    <th>Risk Adj</th>
-                    <th>Alert</th>
-                    <th>Trend</th>
-                    <th>Trade</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sweep.map((item, idx) => {
-                    const rowKey = `${item.token}-${idx}`;
-                    const trendKey = buildTrendCacheKey(item, chain);
-                    const trendSnapshot = trendCache[trendKey];
-                    const displayPrice = Number.isFinite(Number(trendSnapshot?.latestClose))
-                      ? Number(trendSnapshot.latestClose)
-                      : Number(item.price || 0);
-                    const displayChange24h = Number.isFinite(Number(trendSnapshot?.change24h))
-                      ? Number(trendSnapshot.change24h)
-                      : Number(item.price_change_24h || 0);
-                    const trendPoints = Array.isArray(trendSnapshot?.sparkline) && trendSnapshot.sparkline.length
-                      ? trendSnapshot.sparkline
-                      : [
-                          item.price_change_24h || 0,
-                          (item.signals?.volume_divergence || 0) / 3,
-                          (item.signals?.whale_score || 0) / 4,
-                          item.score?.risk_adjusted || 0,
-                        ];
-                    return (
-                      <Fragment key={rowKey}>
-                        <tr className="clickable-row" onClick={() => openTokenChart(item, rowKey)}>
-                          <td>{idx + 1}</td>
-                          <td>
-                            <span className="token-link">{(item.token || '-').toUpperCase()}</span>
-                          </td>
-                          <td>{formatMoney(displayPrice)}</td>
-                          <td className={displayChange24h >= 0 ? 'up' : 'down'}>
-                            {displayChange24h.toFixed(2)}%
-                          </td>
-                          <td>{item.score?.risk_adjusted ?? '-'}</td>
-                          <td>
-                            <span className={`alert-dot ${scoreTone(item.score?.risk_adjusted || 0)}`} />
-                            {(item.score?.alert_level || '-').toUpperCase()}
-                          </td>
-                          <td><Sparkline points={trendPoints} /></td>
-                          <td>
-                            <button
-                              className="btn-trade"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const ca = item.address || item.ca || item.token;
-                                const url = `https://pro.ave.ai/token/${ca}-${chain}`;
-                                window.open(url, '_blank');
-                              }}
-                            >
-                              🚀 Trade
-                            </button>
-                          </td>
-                        </tr>
-
-                        {selectedRowKey === rowKey ? (
-                          <tr className="chart-inline-row">
-                            <td colSpan={8} className="chart-inline-cell">
-                              <div className="tv-toolbar inline">
-                                <div className="tv-control-group">
-                                  <span>Timeframe</span>
-                                  {[7, 14, 30, 90].map((d) => (
-                                    <button
-                                      key={d}
-                                      className={`tv-chip ${timeframe === d ? 'active' : ''}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        reloadChartForTimeframe(d);
-                                      }}
-                                    >
-                                      {d}D
-                                    </button>
-                                  ))}
-                                </div>
-                                <div className="tv-control-group">
-                                  <span>Type</span>
-                                  {['candlestick', 'line', 'area'].map((type) => (
-                                    <button
-                                      key={type}
-                                      className={`tv-chip ${chartType === type ? 'active' : ''}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setChartType(type);
-                                      }}
-                                    >
-                                      {type}
-                                    </button>
-                                  ))}
-                                </div>
-                                <div className="tv-control-group">
-                                  <span>Indicators</span>
-                                  <button
-                                    className={`tv-chip ${showMA ? 'active' : ''}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setShowMA((v) => !v);
-                                    }}
-                                  >
-                                    MA20
-                                  </button>
-                                  <button
-                                    className={`tv-chip ${showEMA ? 'active' : ''}`}
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setShowEMA((v) => !v);
-                                    }}
-                                  >
-                                    EMA20
-                                  </button>
-                                </div>
-                              </div>
-
-                              <div className="tv-chart-panel inline">
-                                {chartLoading ? <p className="empty-note">Loading chart...</p> : null}
-                                {chartError ? <div className="error-banner">{chartError}</div> : null}
-                                {!chartLoading && !chartError && chartData.length ? (
-                                  <LightChartViewer
-                                    data={chartData}
-                                    token={selectedToken}
-                                    chain={chain}
-                                    pairAddress={selectedPairAddress}
-                                    tokenAddress={selectedTokenAddress}
-                                    intervalMinutes={getIntervalMinutes(timeframe)}
-                                    chartType={chartType}
-                                    showMA={showMA}
-                                    showEMA={showEMA}
-                                    onPairDiscovered={(pair) => {
-                                      if (!pair) return;
-                                      setSelectedPairAddress((prev) => (prev === pair ? prev : pair));
-                                      cachePairAddress(selectedTokenAddress, chain, pair);
-                                    }}
-                                  />
-                                ) : null}
-                              </div>
-
-                              {chartData.length ? (
-                                <div className="chart-stats">
-                                  <span>{selectedToken.toUpperCase()} · {chain}</span>
-                                  <span>Open: {formatMoney(chartData[chartData.length - 1]?.open)}</span>
-                                  <span>High: {formatMoney(chartData[chartData.length - 1]?.high)}</span>
-                                  <span>Low: {formatMoney(chartData[chartData.length - 1]?.low)}</span>
-                                  <span>Close: {formatMoney(chartData[chartData.length - 1]?.close)}</span>
-                                </div>
-                              ) : null}
-                            </td>
-                          </tr>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="empty-note">Run category sweep to populate live opportunities.</p>
-          )}
-        </section>
-
-        <section className="glass mini-section" ref={sectionRefs['Signal Engine']}>
-          <div className="table-header">
-            <h2>Signal Engine</h2>
-          </div>
-          <p className="empty-note">
-            Gunakan Analyze dan Sweep untuk menghasilkan signal. Klik token pada Top Signal Candidates untuk membuka chart.
-          </p>
-        </section>
-
-        <section className="glass mini-section" ref={sectionRefs['Whale Feed']}>
-          <div className="table-header">
-            <h2>Whale Feed</h2>
-          </div>
-          <p className="empty-note">
-            Integrasi trade API tersedia di dokumentasi resmi Ave Bot API.
-          </p>
-          <a className="doc-link" href="https://docs-bot-api.ave.ai/" target="_blank" rel="noreferrer">
-            Buka Trade API Docs
-          </a>
-        </section>
-
-        <section className="glass mini-section" ref={sectionRefs['Risk Matrix']}>
-          <div className="table-header">
-            <h2>Risk Matrix</h2>
-          </div>
-          <p className="empty-note">
-            Risk matrix dihitung dari Risk-Adjusted Score, whale concentration, dan anomali volume pada panel utama.
-          </p>
-        </section>
+        {activeNav === 'Risk Matrix' ? (
+          <RiskMatrixSection riskRows={riskRows} riskSummary={riskSummary} />
+        ) : null}
 
         {error ? <div className="error-banner">{error}</div> : null}
       </main>

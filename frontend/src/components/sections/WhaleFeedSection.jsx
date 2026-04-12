@@ -1,0 +1,180 @@
+import { CHAINS } from '../../constants/monitoring';
+import { formatSnapshotTime, getAddressExplorerUrl, getArkhamAddressUrl, shortAddress } from '../../utils/monitoring';
+
+export default function WhaleFeedSection({
+  whaleFeedRows,
+  whaleToken,
+  setWhaleToken,
+  whaleChain,
+  setWhaleChain,
+  runWhaleFeedAnalysis,
+  whaleLoading,
+  whaleError,
+  selectedWhaleWallet,
+  setSelectedWhaleWallet,
+  whaleReport,
+  selectedWhaleTimeline,
+}) {
+  return (
+    <section className="glass mini-section">
+      <div className="table-header">
+        <h2>Whale Feed</h2>
+        <span>{whaleFeedRows.length} rows</span>
+      </div>
+      <p className="helper">
+        Masukkan token dan chain, lalu sistem akan ambil pergerakan whale untuk token tersebut.
+      </p>
+
+      <div className="engine-rule-grid">
+        <label>
+          Token
+          <input
+            value={whaleToken}
+            onChange={(e) => setWhaleToken(e.target.value)}
+            placeholder="contoh: jup"
+          />
+        </label>
+        <label>
+          Chain
+          <select value={whaleChain} onChange={(e) => setWhaleChain(e.target.value)}>
+            {CHAINS.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+        <div className="engine-actions">
+          <button className="tv-chip" onClick={runWhaleFeedAnalysis} disabled={whaleLoading}>
+            {whaleLoading ? 'Analyzing...' : 'Analyze Whale Movement'}
+          </button>
+        </div>
+      </div>
+
+      {whaleError ? <div className="error-banner">{whaleError}</div> : null}
+
+      {whaleFeedRows.length ? (
+        <>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Token</th>
+                  <th>Wallet</th>
+                  <th>Share</th>
+                  <th>24h</th>
+                  <th>Status</th>
+                  <th>Track</th>
+                </tr>
+              </thead>
+              <tbody>
+                {whaleFeedRows.map((row) => {
+                  const active =
+                    String(row.address || '').toLowerCase() === String(selectedWhaleWallet || '').toLowerCase();
+                  return (
+                    <tr key={row.id} className={active ? 'selected-row' : ''}>
+                      <td>{String(whaleReport?.token || whaleToken).toUpperCase()}</td>
+                      <td>{shortAddress(row.address)}</td>
+                      <td>{row.ratio.toFixed(2)}%</td>
+                      <td className={row.delta >= 0 ? 'up' : 'down'}>{row.delta.toFixed(2)}%</td>
+                      <td>{row.isNew ? 'new whale' : 'tracked'}</td>
+                      <td>
+                        <div className="wallet-track-actions">
+                          <button
+                            className={`tv-chip ${active ? 'active' : ''}`}
+                            onClick={() => setSelectedWhaleWallet(String(row.address || '').trim())}
+                            disabled={!row.address}
+                          >
+                            Track
+                          </button>
+                          <button
+                            className="tv-chip"
+                            onClick={() => window.open(getArkhamAddressUrl(row.address), '_blank')}
+                            disabled={!row.address}
+                          >
+                            Arkham
+                          </button>
+                          <button
+                            className="tv-chip"
+                            onClick={() => window.open(getAddressExplorerUrl(whaleChain, row.address), '_blank')}
+                            disabled={!row.address}
+                          >
+                            Explorer
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {selectedWhaleWallet ? (
+            <div className="wallet-tracker-panel">
+              <div className="table-header">
+                <h2>Address Tracker</h2>
+                <span>{shortAddress(selectedWhaleWallet)} · {selectedWhaleTimeline.length} snapshots</span>
+              </div>
+              <p className="helper">
+                Timeline ini menyimpan jejak pergerakan wallet dari setiap kali kamu klik Analyze Whale Movement.
+              </p>
+              <div className="engine-actions">
+                <button
+                  className="tv-chip"
+                  onClick={() => window.open(getArkhamAddressUrl(selectedWhaleWallet), '_blank')}
+                >
+                  Open Arkham Profile
+                </button>
+                <button
+                  className="tv-chip"
+                  onClick={() => window.open(getAddressExplorerUrl(whaleChain, selectedWhaleWallet), '_blank')}
+                >
+                  Open Chain Explorer
+                </button>
+                <button className="tv-chip" onClick={() => setSelectedWhaleWallet('')}>Clear Tracker</button>
+              </div>
+
+              {selectedWhaleTimeline.length ? (
+                <div className="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Time</th>
+                        <th>Token</th>
+                        <th>Chain</th>
+                        <th>Share</th>
+                        <th>24h</th>
+                        <th>Move</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedWhaleTimeline.map((row, idx) => {
+                        const prev = selectedWhaleTimeline[idx + 1];
+                        const move = prev ? Number(row.ratio || 0) - Number(prev.ratio || 0) : 0;
+                        return (
+                          <tr key={`track-${idx}`}>
+                            <td>{formatSnapshotTime(row.capturedAt)}</td>
+                            <td>{String(row.token || '-').toUpperCase()}</td>
+                            <td>{String(row.chain || '-')}</td>
+                            <td>{Number(row.ratio || 0).toFixed(2)}%</td>
+                            <td className={Number(row.delta || 0) >= 0 ? 'up' : 'down'}>{Number(row.delta || 0).toFixed(2)}%</td>
+                            <td className={move >= 0 ? 'up' : 'down'}>{move >= 0 ? '+' : ''}{move.toFixed(2)}%</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="empty-note">Belum ada histori untuk wallet ini. Jalankan Analyze lagi untuk menambah snapshot.</p>
+              )}
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p className="empty-note">Belum ada data whale. Isi token + chain lalu klik Analyze Whale Movement.</p>
+        </>
+      )}
+    </section>
+  );
+}
