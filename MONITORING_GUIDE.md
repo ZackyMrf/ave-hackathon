@@ -1,6 +1,6 @@
 # 🚀 Advanced Monitoring System - Integration Guide
 
-**Ave Claw Hackathon Project**  
+**AVETRACE Hackathon Project**  
 Integrated Telegram Bot + Web Dashboard with Real-Time Alert Management
 
 ---
@@ -513,4 +513,4 @@ For issues or features:
 ---
 
 **Happy Monitoring! 🚀**  
-Ave Claw Hackathon Project - Advanced Alert Integration
+AVETRACE Hackathon Project - Advanced Alert Integration
