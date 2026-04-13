@@ -50,7 +50,7 @@ export default function RiskMatrixSection({ riskRows, riskSummary }) {
           </table>
         </div>
       ) : (
-        <p className="empty-note">Belum ada data risk matrix. Jalankan Analyze atau Sweep.</p>
+        <p className="empty-note">No risk matrix data yet. Run Analyze or Sweep.</p>
       )}
     </section>
   );

@@ -1,9 +1,10 @@
+import React, { useState } from 'react';
+
 export default function PlatformTopNav({
   activeItem,
   sectionItems = [],
   onSelect,
   onGoHome,
-  rightMeta = [],
   secondaryActionLabel,
   onSecondaryAction,
   primaryActionLabel,
@@ -20,35 +21,82 @@ export default function PlatformTopNav({
   primaryWatchlist = [],
   onPrimaryDeleteAlert,
   onPrimaryDeleteWatchlist,
+  isHome = false,
 }) {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleMobileNav = (key) => {
+    setMobileMenuOpen(false);
+    if (onSelect) onSelect(key);
+  };
+
   return (
     <header className="platform-nav-wrap">
       <nav className="platform-nav">
-        <button className="platform-logo" onClick={onGoHome}>
-          AVETRACE
+        {/* Toggle + Logo for mobile */}
+        <button 
+          className="mobile-menu-toggle" 
+          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          aria-label="Toggle menu"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            {mobileMenuOpen ? (
+              <>
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </>
+            ) : (
+              <>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </>
+            )}
+          </svg>
         </button>
 
-        <div className="platform-links" role="tablist" aria-label="primary navigation">
-          {sectionItems.map((item) => (
-            <button
-              key={item.key}
-              className={`platform-link ${activeItem === item.key ? 'active' : ''}`}
-              onClick={() => onSelect?.(item.key)}
-              role="tab"
-              aria-selected={activeItem === item.key}
-            >
-              {item.label}
+        {/* Logo */}
+        <button className="platform-logo" onClick={onGoHome} aria-label="Go to home">
+          <span className="platform-logo-dot" />
+          <span className="platform-logo-text">AVETRACE</span>
+        </button>
+
+        {/* Overlay for mobile side menu */}
+        <div 
+          className={`mobile-overlay ${mobileMenuOpen ? 'active' : ''}`}
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
+        />
+
+        {/* Nav links — Desktop: horizontal list; Mobile: fixed side panel */}
+        <div className={`platform-links-container ${mobileMenuOpen ? 'mobile-open' : ''}`}>
+          <div className="mobile-menu-header">
+            <span className="platform-logo-text">Menu</span>
+            <button className="mobile-menu-close" onClick={() => setMobileMenuOpen(false)}>
+              &times;
             </button>
-          ))}
+          </div>
+          <div className="platform-links" role="tablist" aria-label="primary navigation">
+            {sectionItems.map((item) => {
+              const isActive = activeItem === item.key;
+              return (
+                <button
+                  key={item.key}
+                  className={`platform-link ${isActive ? 'active' : ''}`}
+                  onClick={() => handleMobileNav(item.key)}
+                  role="tab"
+                  aria-selected={isActive}
+                >
+                  {item.label}
+                  {isActive && <span className="platform-link-indicator" />}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
+        {/* Right actions */}
         <div className="platform-nav-right">
-          {rightMeta.map((text) => (
-            <button key={text} className="platform-meta-btn">
-              {text}
-            </button>
-          ))}
-
           {secondaryActionLabel ? (
             <button className="platform-cta secondary" onClick={onSecondaryAction}>
               {secondaryActionLabel}
@@ -65,7 +113,9 @@ export default function PlatformTopNav({
                 {primaryAvatarUrl ? (
                   <img src={primaryAvatarUrl} alt="Telegram profile" className="platform-primary-avatar-img" />
                 ) : (
-                  <span className="platform-primary-avatar-fallback">{String(primaryAvatarFallback || 'TG').slice(0, 2).toUpperCase()}</span>
+                  <span className="platform-primary-avatar-fallback">
+                    {String(primaryAvatarFallback || 'TG').slice(0, 2).toUpperCase()}
+                  </span>
                 )}
               </button>
 

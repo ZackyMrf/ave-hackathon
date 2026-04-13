@@ -5,6 +5,7 @@ import DashboardSection from './components/sections/DashboardSection';
 import SignalEngineSection from './components/sections/SignalEngineSection';
 import WhaleFeedSection from './components/sections/WhaleFeedSection';
 import RiskMatrixSection from './components/sections/RiskMatrixSection';
+import ApiDocs from './components/ApiDocs';
 import { CHAINS, SIGNAL_PRESETS } from './constants/monitoring';
 import {
   buildPairCacheKey,
@@ -317,7 +318,7 @@ export default function App() {
     try {
       const latestStatus = await refreshTelegramStatus();
       if (!latestStatus.tokenConfigured || !latestStatus.botReachable) {
-        setError('Bot token belum siap atau bot belum reachable.');
+        setError('Bot token is not ready or bot is unreachable.');
         return;
       }
 
@@ -450,10 +451,12 @@ export default function App() {
 
   const navItems = useMemo(
     () => [
+      { key: 'home', label: 'Home' },
       { key: 'Dashboard', label: 'Dashboard' },
       { key: 'Signal Engine', label: 'Signal Engine' },
       { key: 'Whale Feed', label: 'Whale Feed' },
       { key: 'Risk Matrix', label: 'Risk Matrix' },
+      { key: 'ApiDocs', label: 'API Docs' },
     ],
     []
   );
@@ -717,7 +720,7 @@ export default function App() {
   // Alert Management Functions
   async function saveTelegramSettings() {
     if (!hasValidTelegramChatId) {
-      setError('Telegram Chat ID belum valid. Kirim /start ke bot dulu, lalu isi ID chat numerik.');
+      setError('Telegram Chat ID is not valid. Send /start to bot first, then enter the numeric chat ID.');
       return;
     }
 
@@ -725,7 +728,7 @@ export default function App() {
     try {
       const latestStatus = await refreshTelegramStatus();
       if (!latestStatus.tokenConfigured) {
-        setError('TELEGRAM_BOT_TOKEN belum diset di backend.');
+        setError('TELEGRAM_BOT_TOKEN is not set on backend.');
         return;
       }
 
@@ -734,7 +737,7 @@ export default function App() {
       if (checked?.user_connected) {
         setStatus(`✅ Telegram connected: ${parsedTelegramChatId}`);
       } else {
-        setStatus(`⚠️ Chat ID tersimpan, tapi bot belum bisa akses chat ${parsedTelegramChatId}. Kirim /start ke bot lalu cek lagi.`);
+        setStatus(`⚠️ Chat ID saved, but bot cannot access chat ${parsedTelegramChatId} yet. Send /start to bot and check again.`);
       }
     } catch (err) {
       setError(`Telegram check failed: ${err.message}`);
@@ -751,7 +754,7 @@ export default function App() {
 
     const latestStatus = await refreshTelegramStatus();
     if (!latestStatus.tokenConfigured) {
-      setError('TELEGRAM_BOT_TOKEN belum diset di backend.');
+      setError('TELEGRAM_BOT_TOKEN is not set on backend.');
       return;
     }
 
@@ -798,7 +801,7 @@ export default function App() {
   async function createAlert(alertData) {
     try {
       if (!hasValidTelegramChatId) {
-        throw new Error('Set Telegram Chat ID dulu di panel Telegram Settings');
+        throw new Error('Set Telegram Chat ID first in Telegram Settings panel');
       }
 
       const res = await fetch(`${API_BASE}/api/alerts/create`, {
@@ -864,7 +867,7 @@ export default function App() {
     const addressValue = String(item?.address || '').trim();
 
     if (!tokenValue || !chainValue) {
-      setError('Data watchlist tidak valid.');
+      setError('Invalid watchlist data.');
       return false;
     }
 
@@ -879,7 +882,7 @@ export default function App() {
       );
 
       if (exists) {
-        setStatus(`⚠️ ${tokenValue} sudah ada di watchlist ${chainValue}.`);
+        setStatus(`⚠️ ${tokenValue} is already in watchlist ${chainValue}.`);
         return true;
       }
 
@@ -908,7 +911,7 @@ export default function App() {
     const chainValue = String(item?.chain || '').trim().toLowerCase();
 
     if (!tokenValue || !chainValue) {
-      setError('Data watchlist tidak valid.');
+      setError('Invalid watchlist data.');
       return false;
     }
 
@@ -1198,10 +1201,10 @@ export default function App() {
       <PlatformTopNav
         activeItem={activeNav}
         sectionItems={navItems}
-        onGoHome={() => setShowHome(true)}
-        onSelect={handleNavigate}
-        secondaryActionLabel="Home"
-        onSecondaryAction={() => setShowHome(true)}
+        onGoHome={() => { setShowHome(true); }}
+        onSelect={(key) => {
+          if (key === 'home') { setShowHome(true); } else { handleNavigate(key); }
+        }}
         primaryActionLabel={telegramActionLoading ? 'Connecting...' : 'Connect Telegram'}
         onPrimaryAction={startTelegramDeepLinkLogin}
         primaryConnected={telegramConnected}
@@ -1221,7 +1224,7 @@ export default function App() {
       <main className="app-main-pane" ref={mainPaneRef}>
         <div className="app-status-pill">Engine: {status}</div>
 
-        {activeNav === 'Dashboard' ? (
+        {activeNav === 'Dashboard' && (
           <DashboardSection
             token={token}
             setToken={setToken}
@@ -1251,6 +1254,7 @@ export default function App() {
             setShowMA={setShowMA}
             showEMA={showEMA}
             setShowEMA={setShowEMA}
+            chartLoading={chartLoading}
             chartError={chartError}
             chartData={chartData}
             selectedToken={selectedToken}
@@ -1264,9 +1268,9 @@ export default function App() {
             toggleWatchlist={toggleWatchlist}
             isTokenInWatchlist={isTokenInWatchlist}
           />
-        ) : null}
+        )}
 
-        {activeNav === 'Signal Engine' ? (
+        {activeNav === 'Signal Engine' && (
           <SignalEngineSection
             signalEngineRows={signalEngineRows}
             enginePreset={enginePreset}
@@ -1281,9 +1285,9 @@ export default function App() {
             runSweep={runSweep}
             handleNavigate={handleNavigate}
           />
-        ) : null}
+        )}
 
-        {activeNav === 'Whale Feed' ? (
+        {activeNav === 'Whale Feed' && (
           <WhaleFeedSection
             whaleFeedRows={whaleFeedRows}
             whaleToken={whaleToken}
@@ -1298,11 +1302,17 @@ export default function App() {
             whaleReport={whaleReport}
             selectedWhaleTimeline={selectedWhaleTimeline}
           />
-        ) : null}
+        )}
 
-        {activeNav === 'Risk Matrix' ? (
+        {activeNav === 'Risk Matrix' && (
           <RiskMatrixSection riskRows={riskRows} riskSummary={riskSummary} />
-        ) : null}
+        )}
+
+        {activeNav === 'ApiDocs' && (
+          <div style={{width: '100%', minHeight: '60vh'}}>
+            <ApiDocs />
+          </div>
+        )}
 
         {error ? <div className="error-banner">{error}</div> : null}
       </main>

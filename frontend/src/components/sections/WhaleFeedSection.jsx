@@ -22,7 +22,7 @@ export default function WhaleFeedSection({
         <span>{whaleFeedRows.length} rows</span>
       </div>
       <p className="helper">
-        Masukkan token dan chain, lalu sistem akan ambil pergerakan whale untuk token tersebut.
+        Enter token and chain, then the system will fetch whale movements for that token.
       </p>
 
       <div className="engine-rule-grid">
@@ -115,7 +115,7 @@ export default function WhaleFeedSection({
                 <span>{shortAddress(selectedWhaleWallet)} · {selectedWhaleTimeline.length} snapshots</span>
               </div>
               <p className="helper">
-                Timeline ini menyimpan jejak pergerakan wallet dari setiap kali kamu klik Analyze Whale Movement.
+                This timeline stores the trace of wallet movements from every time you click Analyze Whale Movement.
               </p>
               <div className="engine-actions">
                 <button
@@ -165,14 +165,14 @@ export default function WhaleFeedSection({
                   </table>
                 </div>
               ) : (
-                <p className="empty-note">Belum ada histori untuk wallet ini. Jalankan Analyze lagi untuk menambah snapshot.</p>
+                <p className="empty-note">No history for this wallet yet. Run Analyze again to add a snapshot.</p>
               )}
             </div>
           ) : null}
         </>
       ) : (
         <>
-          <p className="empty-note">Belum ada data whale. Isi token + chain lalu klik Analyze Whale Movement.</p>
+          <p className="empty-note">No whale data yet. Enter token + chain then click Analyze Whale Movement.</p>
         </>
       )}
     </section>

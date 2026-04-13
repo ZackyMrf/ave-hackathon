@@ -1,0 +1,329 @@
+/* Mobile Responsive Styles */
+
+@media (max-width: 1024px) {
+  /* Platform Nav */
+  .platform-nav {
+    grid-template-columns: auto 1fr;
+    gap: 12px;
+    padding: 0 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  /* App Shell & Panels */
+  .app-shell {
+    overflow-x: hidden;
+  }
+  .bm-main {
+    padding: 12px !important;
+  }
+  
+  /* Platform Nav */
+  .platform-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    height: 56px;
+    min-height: 56px;
+  }
+  .mobile-menu-toggle {
+    display: block !important;
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 8px;
+    margin-left: -8px;
+  }
+  .platform-logo {
+    display: flex; /* Keep logo on mobile when using hamburger */
+    flex: 1;
+    justify-content: center;
+  }
+  
+  /* Mobile Sidebar Overlay */
+  .mobile-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(3px);
+    z-index: 90;
+    display: block !important;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .mobile-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Fixed Side Panel */
+  .platform-links-container {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: 0 !important;
+    height: 100vh !important;
+    width: 280px !important;
+    max-width: 85vw !important;
+    background: rgba(5, 11, 26, 0.98) !important;
+    backdrop-filter: blur(20px) !important;
+    border-right: 1px solid rgba(99, 155, 255, 0.14) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    padding: 0 !important;
+    box-shadow: 10px 0 30px rgba(0, 0, 0, 0.6) !important;
+    z-index: 100 !important;
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  }
+  .platform-links-container.mobile-open {
+    transform: translateX(0) !important;
+  }
+  
+  .mobile-menu-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 20px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    margin-bottom: 12px !important;
+    width: 100% !important;
+  }
+  .mobile-menu-close {
+    background: transparent !important;
+    border: none;
+    color: #b5c7e9;
+    font-size: 28px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 8px !important;
+    width: auto !important;
+  }
+  
+  .platform-links {
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    height: auto !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 0 16px !important;
+    width: 100% !important;
+  }
+  .platform-link {
+    height: auto !important;
+    width: 100% !important;
+    padding: 16px 20px !important;
+    font-size: 1.1rem !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    box-sizing: border-box !important;
+    text-align: left !important;
+    justify-content: flex-start !important;
+    background: rgba(255,255,255,0.03) !important;
+  }
+  .platform-link:hover, .platform-link.active {
+    background: rgba(99, 155, 255, 0.15) !important;
+  }
+  .platform-link-indicator {
+    display: none; /* Hide bottom border indicator on mobile */
+  }
+  
+  /* Hero & Landing */
+  .hero-title {
+    font-size: 2.5rem !important;
+    line-height: 1.2 !important;
+  }
+  .hero-subtitle {
+    font-size: 1rem !important;
+  }
+  .hero-grid, .stats-grid, .features-grid, .landing-grid {
+    grid-template-columns: 1fr !important;
+    gap: 16px !important;
+  }
+  
+  /* Hide hero metadata (Tracked, Alerts, Coverage, etc.) for minimalist mobile feel */
+  .bm-hero-meta {
+    display: none !important;
+  }
+  
+  /* Dashboard / Engine Grids */
+  .engine-rule-grid,
+  .engine-kpis,
+  .dashboard-grid,
+  .engine-filters {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .engine-settings {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  .engine-actions, .kpi-box {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .kpi-box {
+    margin-bottom: 8px;
+  }
+  
+  /* Forms & Filters */
+  .bm-filter-row,
+  .bm-filters {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
+  .bm-filter-btn, .pill-btn {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 8px 12px !important;
+    font-size: 0.8rem !important;
+  }
+  .bm-search, .input-wrap {
+    width: 100% !important;
+  }
+  
+  /* Table wrapping for mobile to prevent layout breakage */
+  .table-wrap, 
+  .table-container {
+    width: 100vw;
+    margin-left: -12px;
+    padding-left: 12px;
+    padding-right: 12px;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    margin-bottom: 16px;
+  }
+  .bm-table {
+    min-width: 700px;
+  }
+  
+  /* API Docs */
+  .apidoc-urls-grid, 
+  .api-cards {
+    grid-template-columns: 1fr !important;
+    display: flex;
+    flex-direction: column;
+  }
+  .api-card {
+    padding: 16px !important;
+  }
+  .apidoc-code-wrap {
+    overflow-x: auto;
+  }
+  
+  /* General Utility */
+  .glass {
+    padding: 16px !important;
+  }
+  h2 {
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  
+  /* Remove `button` raw tag from here, let specific classes handle full width */
+  .btn-primary, .btn-ghost, .platform-cta, .hero-cta, .engine-actions button {
+    padding: 12px 16px !important;
+    font-size: 1rem !important;
+    width: 100%; /* Full width core buttons */
+    text-align: center;
+    justify-content: center;
+    margin-top: 4px;
+    box-sizing: border-box;
+  }
+  
+  /* Exception: Keep right side toggles compact */
+  .platform-nav-right button, .mobile-menu-toggle {
+    width: auto;
+    padding: 8px 12px !important;
+    margin-top: 0;
+  }
+  
+  /* Filter chips and pills (Minimalist design for mobile) */
+  .bm-recent-filters, .bm-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px !important;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
+  }
+  .bm-filter-chip, .bm-filter-btn, .pill-btn, .bm-dashboard-btn {
+    width: auto !important;
+    flex: 0 1 auto !important;
+    padding: 8px 14px !important;
+    font-size: 0.85rem !important;
+    border-radius: 99px !important;
+    margin-top: 0 !important;
+  }
+  .bm-dashboard-btn {
+    border-radius: 8px !important;
+  }
+
+  /* Hide huge jump buttons at bottom of landing since we have mobile sidebar */
+  .bm-jump-row, .bm-jump-grid {
+    display: none !important;
+  }
+  
+  /* Exception: Pagination Navigation */
+  .bm-pagination-row, .bm-page-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+  }
+  .bm-page-btn {
+    width: auto !important;
+    flex: 0 1 auto;
+    padding: 8px 14px !important;
+    font-size: 0.9rem !important;
+    margin-top: 0 !important;
+  }
+  
+  /* Typography and Forms */
+  input, select, .input-wrap {
+    font-size: 1rem !important;
+    padding: 12px !important;
+    height: auto !important;
+    width: 100% !important;
+  }
+  .api-desc, .helper {
+    font-size: 0.9rem !important;
+    line-height: 1.5 !important;
+  }
+  .bm-table th, .bm-table td {
+    font-size: 0.85rem !important;
+    padding: 12px 8px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Ultra small screens */
+  .platform-link {
+    font-size: 0.75rem;
+    padding: 0 6px;
+  }
+  .bm-main {
+    padding: 8px !important;
+  }
+  .hero-title {
+    font-size: 2rem !important;
+  }
+  /* Alert components usually pop up right, align them well on mobile */
+  .platform-primary-menu {
+    width: 300px;
+    right: -10px;
+  }
+}

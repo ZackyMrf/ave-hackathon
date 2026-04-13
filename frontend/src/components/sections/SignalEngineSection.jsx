@@ -21,7 +21,7 @@ export default function SignalEngineSection({
         <span>{signalEngineRows.length} matched</span>
       </div>
       <p className="helper">
-        Di menu ini kita fokus ke rule-based screening, bukan list top signal mentah. Atur rule lalu lihat token yang lolos.
+        In this menu we focus on rule-based screening, not a raw top signal list. Set rules then view tokens that pass.
       </p>
 
       <div className="engine-actions">
@@ -109,7 +109,7 @@ export default function SignalEngineSection({
           </table>
         </div>
       ) : (
-        <p className="empty-note">Belum ada token yang lolos rule saat ini. Coba turunkan threshold atau jalankan Sweep dulu.</p>
+        <p className="empty-note">No tokens passed the rules yet. Try lowering the threshold or run a Sweep first.</p>
       )}
     </section>
   );

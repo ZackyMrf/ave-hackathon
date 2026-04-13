@@ -37,7 +37,7 @@ export function useMonitoringFetchActions({
 
     const isAddressMode = tokenSearchMode === 'address';
     if (isAddressMode && !isLikelyAddress(tokenInput)) {
-      setError('Format contract address tidak valid untuk chain ini.');
+      setError('Invalid contract address format for this chain.');
       setStatus('Address analysis failed');
       return null;
     }
@@ -128,7 +128,7 @@ export function useMonitoringFetchActions({
     const tokenInput = String(whaleToken || '').trim();
     const chainInput = String(whaleChain || '').trim().toLowerCase();
     if (!tokenInput || !chainInput) {
-      setWhaleError('Token dan chain wajib diisi.');
+      setWhaleError('Token and chain are required.');
       return;
     }
 

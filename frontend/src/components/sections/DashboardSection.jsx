@@ -86,7 +86,7 @@ export default function DashboardSection({
 
     const thresholdNum = Number.parseFloat(String(quickAlert.threshold || '').trim());
     if (!Number.isFinite(thresholdNum)) {
-      setStatus('Threshold alert tidak valid.');
+      setStatus('Invalid alert threshold.');
       return;
     }
 
@@ -113,7 +113,7 @@ export default function DashboardSection({
 
     const tokenSymbol = String(item?.token || '').trim();
     if (!tokenSymbol) {
-      setStatus('Token tidak valid untuk membuat alert.');
+      setStatus('Token invalid for creating alert.');
       return;
     }
 
@@ -136,7 +136,7 @@ export default function DashboardSection({
 
     const thresholdNum = Number.parseFloat(String(rowQuickAlert.threshold || '').trim());
     if (!Number.isFinite(thresholdNum)) {
-      setStatus('Threshold alert tidak valid.');
+      setStatus('Invalid alert threshold.');
       return;
     }
 
@@ -230,10 +230,10 @@ export default function DashboardSection({
             </button>
           </div>
           <p className="helper">
-            Mode {tokenSearchMode === 'address' ? 'Contract Address' : 'Symbol'} aktif.
+            Mode {tokenSearchMode === 'address' ? 'Contract Address' : 'Symbol'} active.
             {tokenSearchMode === 'address'
-              ? ' Gunakan CA asli agar tidak ketukar token palsu.'
-              : ' Gunakan Symbol untuk pencarian cepat.'}
+              ? ' Use the real CA to avoid fake tokens.'
+              : ' Use Symbol for quick search.'}
           </p>
 
           {report ? (
@@ -276,7 +276,7 @@ export default function DashboardSection({
                     onClick={() => {
                       const ca = report.address || report.ca || '';
                       if (!isLikelyAddress(ca)) {
-                        setStatus('Bubble Map butuh contract address yang valid.');
+                        setStatus('Bubble Map requires a valid contract address.');
                         return;
                       }
                       window.open(getBubbleMapUrl(ca, chain), '_blank');
@@ -421,7 +421,7 @@ export default function DashboardSection({
             </label>
           </div>
           <button onClick={runSweep} className="btn-ghost" disabled={sweepLoading}>{sweepLoading ? 'Scanning...' : 'Run Sweep'}</button>
-          <p className="helper">Sweep menggunakan network sendiri + kategori wajib, terpisah dari Single Token Probe.</p>
+          <p className="helper">Sweep uses its own network + required category, separate from Single Token Probe.</p>
         </article>
       </section>
 
@@ -432,7 +432,7 @@ export default function DashboardSection({
         </div>
         <p className="helper">
           Signal Engine: 1) Analyze token, 2) Sweep category/network, 3) rank by Risk-Adjusted score,
-          4) validasi tren dari chart + whale context sebelum eksekusi.
+          4) validate trend from chart + whale context before execution.
         </p>
         <div className="engine-kpis">
           <div className="kpi-box">
@@ -538,7 +538,7 @@ export default function DashboardSection({
                                 e.stopPropagation();
                                 const ca = item.address || item.ca || '';
                                 if (!isLikelyAddress(ca)) {
-                                  setStatus(`Bubble Map tidak tersedia untuk ${String(item.token || '').toUpperCase()} karena address tidak valid.`);
+                                  setStatus(`Bubble Map is not available for ${String(item.token || '').toUpperCase()} because of invalid address.`);
                                   return;
                                 }
                                 window.open(getBubbleMapUrl(ca, sweepChain), '_blank');

@@ -96,6 +96,7 @@ export default function LandingScreen({
     { key: 'Signal Engine', label: 'Signal Engine' },
     { key: 'Whale Feed', label: 'Whale Feed' },
     { key: 'Risk Matrix', label: 'Risk Matrix' },
+    { key: 'ApiDocs', label: 'API Docs' },
   ];
 
   const [homeAnalyzing, setHomeAnalyzing] = useState(false);
@@ -585,7 +586,7 @@ export default function LandingScreen({
                     onClick={() => {
                       const ca = report.address || report.ca || '';
                       if (!isLikelyAddress(ca)) {
-                        setStatus?.('Bubble Map butuh contract address yang valid.');
+                        setStatus?.('Bubble Map requires a valid contract address.');
                         return;
                       }
                       window.open(getBubbleMapUrl(ca, chain), '_blank');
