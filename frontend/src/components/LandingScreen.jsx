@@ -436,7 +436,7 @@ export default function LandingScreen({
           {feedError ? <div className="error-banner bm-search-error">{feedError}</div> : null}
 
           <article className="bm-card bm-recent-card">
-            <table className="bm-recent-table">
+            <table className="bm-recent-table mobile-card-table">
               <thead>
                 <tr>
                   <th>Time</th>
@@ -456,26 +456,26 @@ export default function LandingScreen({
                     const ts = timeRaw > 10_000_000_000 ? Math.floor(timeRaw / 1000) : Math.floor(timeRaw);
                     return (
                       <tr key={String(row.id || `${row.txHash}:${row.tokenAddress}`)}>
-                        <td title={ts > 0 ? new Date(ts * 1000).toLocaleString() : '-'}>{formatRelativeTime(ts)}</td>
-                        <td className="bm-wallet">{shortWallet(row.wallet)}</td>
-                        <td>
+                        <td data-label="Time" title={ts > 0 ? new Date(ts * 1000).toLocaleString() : '-'}>{formatRelativeTime(ts)}</td>
+                        <td data-label="Wallet" className="bm-wallet">{shortWallet(row.wallet)}</td>
+                        <td data-label="Side">
                           <span className={`bm-side-badge ${String(row.side || '').toUpperCase() === 'BUY' ? 'buy' : 'sell'}`}>
                             {String(row.side || '').toUpperCase() || '-'}
                           </span>
                         </td>
-                        <td className="bm-token-symbol">{String(row.symbol || '-').toUpperCase()}</td>
-                        <td>{String(row.swapLabel || '-')}</td>
-                        <td>{formatUsd(row.usd)}</td>
-                        <td>
+                        <td data-label="Token" className="bm-token-symbol">{String(row.symbol || '-').toUpperCase()}</td>
+                        <td data-label="Swap">{String(row.swapLabel || '-')}</td>
+                        <td data-label="USD">{formatUsd(row.usd)}</td>
+                        <td data-label="Chain">
                           <span className="bm-chain-badge">{String(row.chain || '-')}</span>
                         </td>
-                        <td>{String(row.amm || '-')}</td>
+                        <td data-label="AMM">{String(row.amm || '-')}</td>
                       </tr>
                     );
                   })
                 ) : (
                   <tr>
-                    <td colSpan={8} className="bm-empty-row">
+                    <td data-label="" colSpan={8} className="bm-empty-row">
                       {feedState === 'live' ? 'Waiting for new swap transactions...' : 'Connecting to live transaction feed...'}
                     </td>
                   </tr>

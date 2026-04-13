@@ -83,7 +83,7 @@ export default function SignalEngineSection({
 
       {signalEngineRows.length ? (
         <div className="table-wrap">
-          <table>
+          <table className="mobile-card-table">
             <thead>
               <tr>
                 <th>#</th>
@@ -97,12 +97,12 @@ export default function SignalEngineSection({
             <tbody>
               {signalEngineRows.map((row, idx) => (
                 <tr key={row.id}>
-                  <td>{idx + 1}</td>
-                  <td>{row.token}</td>
-                  <td>{row.riskAdj.toFixed(0)}</td>
-                  <td>{row.whaleScore.toFixed(0)}</td>
-                  <td className={row.trend >= 0 ? 'up' : 'down'}>{row.trend.toFixed(2)}%</td>
-                  <td>{row.action}</td>
+                  <td data-label="#">{idx + 1}</td>
+                  <td data-label="Token">{row.token}</td>
+                  <td data-label="Risk Adj">{row.riskAdj.toFixed(0)}</td>
+                  <td data-label="Whale">{row.whaleScore.toFixed(0)}</td>
+                  <td data-label="Trend 24h" className={row.trend >= 0 ? 'up' : 'down'}>{row.trend.toFixed(2)}%</td>
+                  <td data-label="Action">{row.action}</td>
                 </tr>
               ))}
             </tbody>

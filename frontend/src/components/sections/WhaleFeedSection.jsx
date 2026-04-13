@@ -54,7 +54,7 @@ export default function WhaleFeedSection({
       {whaleFeedRows.length ? (
         <>
           <div className="table-wrap">
-            <table>
+            <table className="mobile-card-table">
               <thead>
                 <tr>
                   <th>Token</th>
@@ -71,12 +71,12 @@ export default function WhaleFeedSection({
                     String(row.address || '').toLowerCase() === String(selectedWhaleWallet || '').toLowerCase();
                   return (
                     <tr key={row.id} className={active ? 'selected-row' : ''}>
-                      <td>{String(whaleReport?.token || whaleToken).toUpperCase()}</td>
-                      <td>{shortAddress(row.address)}</td>
-                      <td>{row.ratio.toFixed(2)}%</td>
-                      <td className={row.delta >= 0 ? 'up' : 'down'}>{row.delta.toFixed(2)}%</td>
-                      <td>{row.isNew ? 'new whale' : 'tracked'}</td>
-                      <td>
+                      <td data-label="Token">{String(whaleReport?.token || whaleToken).toUpperCase()}</td>
+                      <td data-label="Wallet">{shortAddress(row.address)}</td>
+                      <td data-label="Share">{row.ratio.toFixed(2)}%</td>
+                      <td data-label="24h" className={row.delta >= 0 ? 'up' : 'down'}>{row.delta.toFixed(2)}%</td>
+                      <td data-label="Status">{row.isNew ? 'new whale' : 'tracked'}</td>
+                      <td data-label="Track">
                         <div className="wallet-track-actions">
                           <button
                             className={`tv-chip ${active ? 'active' : ''}`}
@@ -135,7 +135,7 @@ export default function WhaleFeedSection({
 
               {selectedWhaleTimeline.length ? (
                 <div className="table-wrap">
-                  <table>
+                  <table className="mobile-card-table">
                     <thead>
                       <tr>
                         <th>Time</th>
@@ -152,12 +152,12 @@ export default function WhaleFeedSection({
                         const move = prev ? Number(row.ratio || 0) - Number(prev.ratio || 0) : 0;
                         return (
                           <tr key={`track-${idx}`}>
-                            <td>{formatSnapshotTime(row.capturedAt)}</td>
-                            <td>{String(row.token || '-').toUpperCase()}</td>
-                            <td>{String(row.chain || '-')}</td>
-                            <td>{Number(row.ratio || 0).toFixed(2)}%</td>
-                            <td className={Number(row.delta || 0) >= 0 ? 'up' : 'down'}>{Number(row.delta || 0).toFixed(2)}%</td>
-                            <td className={move >= 0 ? 'up' : 'down'}>{move >= 0 ? '+' : ''}{move.toFixed(2)}%</td>
+                            <td data-label="Time">{formatSnapshotTime(row.capturedAt)}</td>
+                            <td data-label="Token">{String(row.token || '-').toUpperCase()}</td>
+                            <td data-label="Chain">{String(row.chain || '-')}</td>
+                            <td data-label="Share">{Number(row.ratio || 0).toFixed(2)}%</td>
+                            <td data-label="24h" className={Number(row.delta || 0) >= 0 ? 'up' : 'down'}>{Number(row.delta || 0).toFixed(2)}%</td>
+                            <td data-label="Move" className={move >= 0 ? 'up' : 'down'}>{move >= 0 ? '+' : ''}{move.toFixed(2)}%</td>
                           </tr>
                         );
                       })}

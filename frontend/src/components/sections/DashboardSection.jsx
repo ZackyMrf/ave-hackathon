@@ -459,7 +459,7 @@ export default function DashboardSection({
 
         {sweep.length ? (
           <div className="table-wrap">
-            <table>
+            <table className="mobile-card-table dashboard-mobile-table">
               <thead>
                 <tr>
                   <th>#</th>
@@ -505,21 +505,21 @@ export default function DashboardSection({
                           openTokenChart(item, rowKey);
                         }}
                       >
-                        <td>{idx + 1}</td>
-                        <td>
+                        <td data-label="#">{idx + 1}</td>
+                        <td data-label="Token">
                           <span className="token-link">{String(item.token || '-').toUpperCase()}</span>
                         </td>
-                        <td>{formatMoney(displayPrice)}</td>
-                        <td className={displayChange24h >= 0 ? 'up' : 'down'}>
+                        <td data-label="Price">{formatMoney(displayPrice)}</td>
+                        <td data-label="24h" className={displayChange24h >= 0 ? 'up' : 'down'}>
                           {displayChange24h.toFixed(2)}%
                         </td>
-                        <td>{item.score?.risk_adjusted ?? '-'}</td>
-                        <td>
+                        <td data-label="Risk Adj">{item.score?.risk_adjusted ?? '-'}</td>
+                        <td data-label="Alert">
                           <span className={`alert-dot ${scoreTone(item.score?.risk_adjusted || 0)}`} />
                           {String(item.score?.alert_level || '-').toUpperCase()}
                         </td>
-                        <td><Sparkline points={trendPoints} /></td>
-                        <td>
+                        <td data-label="Trend"><Sparkline points={trendPoints} /></td>
+                        <td data-label="Trade">
                           <div className="trade-actions">
                             <button
                               className="btn-trade"
@@ -579,7 +579,7 @@ export default function DashboardSection({
 
                       {rowQuickAlertTarget?.rowKey === rowKey ? (
                         <tr className="chart-inline-row">
-                          <td colSpan={8} className="chart-inline-cell">
+                          <td data-label="" colSpan={8} className="chart-inline-cell">
                             <div className="quick-alert-box">
                               <div className="quick-alert-grid">
                                 <label>
@@ -645,7 +645,7 @@ export default function DashboardSection({
 
                       {selectedRowKey === rowKey ? (
                         <tr className="chart-inline-row">
-                          <td colSpan={8} className="chart-inline-cell">
+                          <td data-label="" colSpan={8} className="chart-inline-cell">
                             <div className="tv-toolbar inline">
                               <div className="tv-control-group">
                                 <span>Timeframe</span>

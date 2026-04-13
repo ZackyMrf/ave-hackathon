@@ -26,7 +26,7 @@ export default function RiskMatrixSection({ riskRows, riskSummary }) {
 
       {riskRows.length ? (
         <div className="table-wrap">
-          <table>
+          <table className="mobile-card-table">
             <thead>
               <tr>
                 <th>Token</th>
@@ -39,11 +39,11 @@ export default function RiskMatrixSection({ riskRows, riskSummary }) {
             <tbody>
               {riskRows.map((row) => (
                 <tr key={row.id}>
-                  <td>{row.token}</td>
-                  <td>{row.riskAdj}</td>
-                  <td>{row.tier.toUpperCase()}</td>
-                  <td>{row.whaleScore.toFixed(0)}</td>
-                  <td>{row.volDiv.toFixed(0)}</td>
+                  <td data-label="Token">{row.token}</td>
+                  <td data-label="Risk Adj">{row.riskAdj}</td>
+                  <td data-label="Tier">{row.tier.toUpperCase()}</td>
+                  <td data-label="Whale">{row.whaleScore.toFixed(0)}</td>
+                  <td data-label="Vol Div">{row.volDiv.toFixed(0)}</td>
                 </tr>
               ))}
             </tbody>

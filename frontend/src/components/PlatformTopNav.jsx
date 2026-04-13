@@ -24,24 +24,22 @@ export default function PlatformTopNav({
   return (
     <header className="platform-nav-wrap">
       <nav className="platform-nav">
-        <div className="platform-nav-left">
-          <button className="platform-logo" onClick={onGoHome}>
-            AVETRACE
-          </button>
+        <button className="platform-logo" onClick={onGoHome}>
+          AVETRACE
+        </button>
 
-          <div className="platform-links" role="tablist" aria-label="primary navigation">
-            {sectionItems.map((item) => (
-              <button
-                key={item.key}
-                className={`platform-link ${activeItem === item.key ? 'active' : ''}`}
-                onClick={() => onSelect?.(item.key)}
-                role="tab"
-                aria-selected={activeItem === item.key}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
+        <div className="platform-links" role="tablist" aria-label="primary navigation">
+          {sectionItems.map((item) => (
+            <button
+              key={item.key}
+              className={`platform-link ${activeItem === item.key ? 'active' : ''}`}
+              onClick={() => onSelect?.(item.key)}
+              role="tab"
+              aria-selected={activeItem === item.key}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
 
         <div className="platform-nav-right">
