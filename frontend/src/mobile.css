@@ -75,12 +75,14 @@
 
   .bm-search-wrap {
     width: 100%;
-    height: 48px;
+    height: auto;
+    min-height: 48px;
   }
 
   .bm-search-controls {
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
+    margin-top: 16px;
   }
 
   .bm-mode-switch {
@@ -611,7 +613,32 @@
 /* ─── SMALL PHONES (≤480px) ─────────────────────────── */
 @media (max-width: 480px) {
   .bm-main {
-    padding: 8px !important;
+    padding: 12px 14px !important;
+  }
+
+  .bm-recent-filters,
+  .bm-filters {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+    width: 100% !important;
+    scrollbar-width: none;
+    justify-content: flex-start !important;
+  }
+
+  .bm-recent-filters::-webkit-scrollbar,
+  .bm-filters::-webkit-scrollbar {
+    display: none;
+  }
+
+  .bm-filter-chip {
+    flex-shrink: 0 !important;
+    width: auto !important;
+    padding: 8px 14px !important;
+    white-space: nowrap !important;
   }
 
   .hero-title {
