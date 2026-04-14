@@ -239,6 +239,30 @@ export default function DashboardSection({
 
           {report ? (
             <div className="report-grid">
+              {report.scam_warning ? (
+                <div
+                  className="error-banner"
+                  style={{
+                    gridColumn: '1 / -1',
+                    background: report.scam_warning.severity === 'high'
+                      ? 'rgba(255,50,50,0.15)'
+                      : 'rgba(255,180,0,0.12)',
+                    border: `1px solid ${report.scam_warning.severity === 'high' ? '#ff4444' : '#ffb300'}`,
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    color: report.scam_warning.severity === 'high' ? '#ff6b6b' : '#ffd54f',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {report.scam_warning.severity === 'high' ? '⚠️ POSSIBLE FAKE/SCAM TOKEN' : '⚠️ Caution'}
+                  <br />
+                  <span style={{ fontWeight: 400, fontSize: '0.8rem' }}>
+                    {report.scam_warning.message}
+                  </span>
+                </div>
+              ) : null}
               <div className="metric-box">
                 <span>Token Name</span>
                 <strong>{String(report.name || report.token || '-')}</strong>

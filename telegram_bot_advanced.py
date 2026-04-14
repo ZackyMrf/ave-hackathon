@@ -150,10 +150,40 @@ def format_token_info(token: str, chain: str) -> str:
             "red": "🔴",
         }.get(s["alert_level"], "⚪")
 
-        lines = [
+        tvl     = float(data.get("tvl", 0) or 0)
+        holders = int(data.get("holders", 0) or 0)
+        price   = float(data.get("price", 0) or 0)
+
+        # --- Scam / Fake Token Detection ---
+        scam_flags = []
+        if tvl < 1_000:
+            scam_flags.append(f"TVL only ${tvl:.2f}")
+        if holders < 50:
+            scam_flags.append(f"only {holders} holders")
+        if price == 0.0:
+            scam_flags.append("price is $0.00")
+
+        scam_warning = ""
+        if len(scam_flags) >= 2:
+            # Multiple red flags → HIGH RISK
+            scam_warning = (
+                "⚠️ *WARNING: POSSIBLE FAKE/SCAM TOKEN*\n"
+                f"_Suspicious metrics: {', '.join(scam_flags)}_\n"
+                "_This may NOT be the token you were looking for._\n"
+                "_Try searching by contract address instead._\n"
+            )
+        elif len(scam_flags) == 1:
+            scam_warning = f"⚠️ _Caution: {scam_flags[0]} — verify this is the correct token._\n"
+        # --- End Detection ---
+
+        lines = []
+        if scam_warning:
+            lines.append(scam_warning)
+
+        lines += [
             f"📊 *{token.upper()}* ({chain})",
-            f"Price: `${data['price']:.6f}` | 24h: {data['price_change_24h']:+.1f}%",
-            f"TVL: `${data['tvl']/1e6:.2f}M` | Holders: {data['holders']:,}",
+            f"Price: `${price:.6f}` | 24h: {data['price_change_24h']:+.1f}%",
+            f"TVL: `${tvl/1e6:.2f}M` | Holders: {holders:,}",
             "",
             f"*Score: {s['total']}/100* {alert_emoji}",
             f"Risk-Adjusted: {s['risk_adjusted']}/100",

@@ -734,8 +734,42 @@ def analyze(
                 ca_for_whales = str(ave_token.get("ca") or parsed_token).strip()
                 whales = ave_service.get_whale_movements(ca_for_whales, parsed_chain) if ca_for_whales else []
                 ave_token["_whales_raw"] = whales
-                return _build_fallback_report_from_ave(ave_token, parsed_chain, parsed_token)
-            raise HTTPException(status_code=400, detail=result["error"])
+                result = _build_fallback_report_from_ave(ave_token, parsed_chain, parsed_token)
+            else:
+                raise HTTPException(status_code=400, detail=result["error"])
+
+        # ── Scam / Fake-Token Detection ──────────────────────────────────────
+        if isinstance(result, dict) and "error" not in result:
+            tvl     = float(result.get("tvl", 0) or 0)
+            holders = int(result.get("holders", 0) or 0)
+            price   = float(result.get("price", 0) or 0)
+
+            flags = []
+            if tvl < 1_000:
+                flags.append(f"TVL only ${tvl:.2f}")
+            if holders < 50:
+                flags.append(f"only {holders} holders")
+            if price == 0.0:
+                flags.append("price is $0.00")
+
+            if len(flags) >= 2:
+                result["scam_warning"] = {
+                    "severity": "high",
+                    "reasons": flags,
+                    "message": (
+                        "⚠️ POSSIBLE FAKE/SCAM TOKEN — "
+                        + ", ".join(flags)
+                        + ". Try searching by contract address for accuracy."
+                    ),
+                }
+            elif len(flags) == 1:
+                result["scam_warning"] = {
+                    "severity": "caution",
+                    "reasons": flags,
+                    "message": f"Caution: {flags[0]} — verify this is the correct token.",
+                }
+        # ── End Detection ────────────────────────────────────────────────────
+
         return result
     except HTTPException:
         raise
