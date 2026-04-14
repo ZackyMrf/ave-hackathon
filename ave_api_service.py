@@ -36,6 +36,7 @@ class AveApiService:
         Returns:
             Token info dict atau None jika error
         """
+        chain = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         try:
             # Format URL sesuai Ave API
             url = f"{self.BASE_URL}/api/v3/tokens/{ca}-{chain}"
@@ -63,6 +64,7 @@ class AveApiService:
         Returns:
             List of token info
         """
+        chain = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         try:
             url = f"{self.BASE_URL}/api/v3/tokens"
             params = {
@@ -95,6 +97,7 @@ class AveApiService:
         Returns:
             List of whale transactions
         """
+        chain = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         try:
             url = f"{self.BASE_URL}/api/v3/tokens/{ca}-{chain}/whales"
             response = self.session.get(url, timeout=10)
@@ -117,6 +120,7 @@ class AveApiService:
         Returns:
             Holder distribution data
         """
+        chain = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         try:
             url = f"{self.BASE_URL}/api/v3/tokens/{ca}-{chain}/holders"
             response = self.session.get(url, timeout=10)
