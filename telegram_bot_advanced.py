@@ -163,22 +163,35 @@ def format_token_info(token: str, chain: str) -> str:
         if price == 0.0:
             scam_flags.append("price is $0.00")
 
-        scam_warning = ""
         if len(scam_flags) >= 2:
-            # Multiple red flags → HIGH RISK
-            scam_warning = (
-                "⚠️ *WARNING: POSSIBLE FAKE/SCAM TOKEN*\n"
-                f"_Suspicious metrics: {', '.join(scam_flags)}_\n"
-                "_This may NOT be the token you were looking for._\n"
-                "_Try searching by contract address instead._\n"
+            # HIGH — likely a fake token, stop here and provide guidance
+            return (
+                f"🚫 *TOKEN NOT FOUND / LIKELY INCORRECT*\n\n"
+                f"Results for *{token.upper()}* ({chain}) are suspicious:\n"
+                + "\n".join(f"  • {f}" for f in scam_flags)
+                + "\n\n"
+                "❌ *This is likely NOT the token you were looking for.*\n\n"
+                "✅ *Solution:*\n"
+                "Search using the correct *contract address (CA)*.\n"
+                "Example:\n"
+                f"`/ave {token} {chain}` ← using symbol _(prone to error)_\n"
+                "→ Replace with the official token CA, for example:\n"
+                "`/ave 0x5a98fcbea516cf06857215779fd812ca3bef1b32 ethereum`\n\n"
+                "💡 Check the official CA on CoinGecko / CoinMarketCap."
             )
-        elif len(scam_flags) == 1:
-            scam_warning = f"⚠️ _Caution: {scam_flags[0]} — verify this is the correct token._\n"
-        # --- End Detection ---
+        # --- End Detection HIGH ---
+
+        # Single caution flag — show a light warning above the result
+        caution_line = ""
+        if len(scam_flags) == 1:
+            caution_line = (
+                f"⚠️ _Caution: {scam_flags[0]} — ensure this is the correct token._\n"
+                "_If incorrect, search again using the contract address (CA)._\n"
+            )
 
         lines = []
-        if scam_warning:
-            lines.append(scam_warning)
+        if caution_line:
+            lines.append(caution_line)
 
         lines += [
             f"📊 *{token.upper()}* ({chain})",

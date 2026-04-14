@@ -241,26 +241,54 @@ export default function DashboardSection({
             <div className="report-grid">
               {report.scam_warning ? (
                 <div
-                  className="error-banner"
                   style={{
                     gridColumn: '1 / -1',
                     background: report.scam_warning.severity === 'high'
-                      ? 'rgba(255,50,50,0.15)'
-                      : 'rgba(255,180,0,0.12)',
-                    border: `1px solid ${report.scam_warning.severity === 'high' ? '#ff4444' : '#ffb300'}`,
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    color: report.scam_warning.severity === 'high' ? '#ff6b6b' : '#ffd54f',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
-                    lineHeight: 1.5,
+                      ? 'rgba(239,68,68,0.12)'
+                      : 'rgba(245,158,11,0.10)',
+                    border: `1.5px solid ${report.scam_warning.severity === 'high' ? '#ef4444' : '#f59e0b'}`,
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
                   }}
                 >
-                  {report.scam_warning.severity === 'high' ? '⚠️ POSSIBLE FAKE/SCAM TOKEN' : '⚠️ Caution'}
-                  <br />
-                  <span style={{ fontWeight: 400, fontSize: '0.8rem' }}>
-                    {report.scam_warning.message}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ fontSize: '1.2rem' }}>
+                      {report.scam_warning.severity === 'high' ? '🚫' : '⚠️'}
+                    </span>
+                    <strong style={{
+                      color: report.scam_warning.severity === 'high' ? '#f87171' : '#fbbf24',
+                      fontSize: '0.9rem',
+                    }}>
+                      {report.scam_warning.severity === 'high'
+                        ? 'This token is likely INCORRECT / FAKE!'
+                        : 'Caution — Verify this token'}
+                    </strong>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#aaa', lineHeight: 1.5 }}>
+                    {report.scam_warning.reasons.map((r, i) => (
+                      <span key={i} style={{ display: 'block' }}>• {r}</span>
+                    ))}
+                  </p>
+                  {report.scam_warning.severity === 'high' && (
+                    <>
+                      <p style={{ margin: 0, fontSize: '0.82rem', color: '#ccc' }}>
+                        This is likely NOT the token you were looking for. Use the official <strong>Contract Address (CA)</strong> for accurate results.
+                      </p>
+                      <button
+                        className="btn-primary"
+                        style={{ alignSelf: 'flex-start', padding: '6px 14px', fontSize: '0.8rem', marginTop: '2px' }}
+                        onClick={() => {
+                          setTokenSearchMode('address');
+                          setStatus('Switched to Contract Address mode. Paste the official CA to analyze.');
+                        }}
+                      >
+                        🔍 Search with Contract Address
+                      </button>
+                    </>
+                  )}
                 </div>
               ) : null}
               <div className="metric-box">

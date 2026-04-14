@@ -542,6 +542,44 @@ export default function LandingScreen({
             <div className="bm-analyze-grid">
               <article className="glass card">
                 <h3 className="bm-analyze-subtitle">Token Snapshot</h3>
+                {report.scam_warning ? (
+                  <div style={{
+                    background: report.scam_warning.severity === 'high' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.10)',
+                    border: `1.5px solid ${report.scam_warning.severity === 'high' ? '#ef4444' : '#f59e0b'}`,
+                    borderRadius: '10px',
+                    padding: '14px 16px',
+                    marginBottom: '12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '8px',
+                  }}>
+                    <strong style={{ color: report.scam_warning.severity === 'high' ? '#f87171' : '#fbbf24', fontSize: '0.9rem' }}>
+                      {report.scam_warning.severity === 'high' ? '🚫 This token is likely INCORRECT / FAKE!' : '⚠️ Caution — Verify this token'}
+                    </strong>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#aaa', lineHeight: 1.5 }}>
+                      {report.scam_warning.reasons.map((r, i) => (
+                        <span key={i} style={{ display: 'block' }}>• {r}</span>
+                      ))}
+                    </p>
+                    {report.scam_warning.severity === 'high' && (
+                      <>
+                        <p style={{ margin: 0, fontSize: '0.82rem', color: '#ccc' }}>
+                          This is likely NOT the token you were looking for. Use the official <strong>Contract Address (CA)</strong> for accurate results.
+                        </p>
+                        <button
+                          className="btn-primary"
+                          style={{ alignSelf: 'flex-start', padding: '6px 14px', fontSize: '0.8rem' }}
+                          onClick={() => {
+                            setTokenSearchMode?.('address');
+                            setShowAnalyzeModal(false);
+                          }}
+                        >
+                          🔍 Search with Contract Address
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : null}
                 <div className="report-grid">
                   <div className="metric-box">
                     <span>Token Name</span>
