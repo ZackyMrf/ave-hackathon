@@ -164,7 +164,7 @@ SUPPORTED_CHAINS = [
 ]
 
 CHAIN_ALIASES = {
-    "eth": "ethereum",
+    "ethereum": "eth",
 }
 
 SUPPORTED_CATEGORIES = [
