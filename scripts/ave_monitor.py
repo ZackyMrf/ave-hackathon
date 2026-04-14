@@ -414,7 +414,7 @@ class AveAccumulationMonitor:
 
     def get_category_chain_trends(self, category: str, chain: str, top_n: int = 5) -> List[Dict]:
         """Get lightweight trend ranking for one category on one chain."""
-        chain_norm = str(chain or "solana").strip().lower()
+        chain_norm = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         category_norm = str(category or "all").strip().lower()
         pool_limit = max(24, min(top_n * 8, 160))
 
@@ -1060,6 +1060,7 @@ class AveAccumulationMonitor:
     
     def analyze_single_token(self, token: str, chain: str) -> Dict:
         """Mode A: Deep analysis on single token"""
+        chain = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         print(f"🔍 Analyzing {token.upper()} on {chain}...")
         
         # Fetch data
@@ -1195,6 +1196,7 @@ class AveAccumulationMonitor:
     
     def sweep_scan(self, category: str, chain: str, top_n: int = 5) -> List[Dict]:
         """Mode B: Sweep scan across a chain with optional category filter."""
+        chain = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         top_n = max(1, min(int(top_n), 20))
         category_norm = str(category or "all").strip().lower()
         is_network_wide = category_norm in {"", "all", "any", "network", "network-wide", "chain", "*"}
@@ -1203,7 +1205,7 @@ class AveAccumulationMonitor:
 
         chain_fallback_tokens = {
             "solana": ["SOL", "JUP", "RAY", "BONK", "WIF", "PYTH", "JTO", "RNDR", "JTO", "WEN", "POPCAT", "BOME"],
-            "ethereum": ["ETH", "UNI", "AAVE", "MKR", "LDO", "PEPE", "LINK", "ARB", "OP", "CRV", "SNX", "MATIC"],
+            "eth": ["ETH", "UNI", "AAVE", "MKR", "LDO", "PEPE", "LINK", "ARB", "OP", "CRV", "SNX", "MATIC"],
             "bsc": ["BNB", "CAKE", "XVS", "BAKE", "TWT", "DOGE", "SHIB", "FLOKI", "XRP", "ETH", "BTC", "USDT"],
             "base": ["ETH", "AERO", "DEGEN", "BRETT", "USDC", "BALD", "TOSHI", "KEYCAT", "PRIME", "AAVE", "LINK", "UNI"],
             "arbitrum": ["ARB", "GMX", "RDNT", "MAGIC", "GRAIL", "ETH", "LINK", "AAVE", "UNI", "USDC", "PENDLE", "WBTC"],
