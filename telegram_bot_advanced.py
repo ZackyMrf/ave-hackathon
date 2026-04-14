@@ -50,6 +50,9 @@ COMMAND_ALERT = "/alert"
 COMMAND_WATCHLIST = "/watchlist"
 COMMAND_STATUS = "/status"
 COMMAND_SWEEP = "/sweep"
+COMMAND_AVESWEEP = "/avesweep"
+COMMAND_CHAINS = "/chains"
+COMMAND_AVE = "/ave"
 
 
 def sync_alerts_from_storage():
@@ -230,10 +233,13 @@ def handle_command_start(chat_id: int, args: Optional[List[str]] = None, chat_me
         "*Available Commands:*",
         "/help - Show all commands",
         "/analyze `token` `chain` - Analyze token",
+        "/ave `token` `[chain]` - Quick analyze (alias)",
+        "/sweep `[category]` `[chain]` `[n]` - Market sweep",
+        "/avesweep `[category]` `[chain]` `[n]` - Sweep alias",
         "/alert - Create/manage alerts",
         "/watchlist - Manage watchlist",
         "/status - Show portfolio status",
-        "/sweep `[category]` - Market sweep (default: all/network-wide)",
+        "/chains - List supported chains",
         "",
         "*Alert Types:*",
         "💰 Price alerts (above/below thresholds)",
@@ -252,10 +258,13 @@ def handle_command_help(chat_id: int):
         "",
         "*Basic Commands:*",
         "`/analyze SOL solana` - Analyze Solana token",
+        "`/ave SOL solana` - Quick analyze (alias)",
         "`/sweep` - Run network-wide scan on default chain",
         "`/sweep all solana` - Network-wide scan on Solana",
-        "`/sweep trending` - Apply category filter",
+        "`/sweep trending solana 5` - Category filter with limit",
+        "`/avesweep meme solana 5` - Sweep alias",
         "`/status` - Show your monitoring stats",
+        "`/chains` - List supported chains",
         "",
         "*Alert Management:*",
         "`/alert create` - Create new alert",
@@ -298,28 +307,215 @@ def handle_command_analyze(chat_id: int, args: List[str]):
 
 def handle_command_sweep(chat_id: int, args: List[str]):
     """Handle /sweep command"""
-    category = args[0] if args else "all"
-    chain = args[1] if len(args) > 1 else "solana"
+    valid_chains = {"solana", "ethereum", "bsc", "base", "arbitrum", "optimism", "polygon", "avalanche"}
 
+    category = "all"
+    chain = "solana"
+    limit = 5
+
+    try:
+        if len(args) >= 1:
+            first = args[0].lower()
+            if first in valid_chains:
+                chain = first
+                if len(args) > 1:
+                    try:
+                        limit = int(args[1])
+                    except ValueError:
+                        pass
+            else:
+                category = first
+                if len(args) > 1:
+                    chain = args[1].lower()
+                if len(args) > 2:
+                    try:
+                        limit = int(args[2])
+                    except ValueError:
+                        pass
+    except (IndexError, ValueError):
+        pass
+
+    limit = max(1, min(limit, 20))
+    scope = f"{chain} network-wide" if category == "all" else f"{category} on {chain}"
+    send_message(chat_id, f"🔄 Sweeping {scope} (top {limit})...")
+
+    # Try API first, then fall back to direct ave_monitor
+    sweep_results = None
     try:
         resp = requests.get(
             f"{API_BASE_URL}/api/sweep",
-            params={"category": category, "chain": chain, "top": 5},
-            timeout=10,
+            params={"category": category, "chain": chain, "top": limit},
+            timeout=120,
         )
-        data = resp.json()["results"]
+        if resp.ok:
+            body = resp.json()
+            sweep_results = body.get("results", [])
+    except Exception:
+        pass
 
-        lines = [f"*📊 Top {len(data)} {category.upper()} Tokens ({chain})*", ""]
+    # Fallback: call ave_monitor directly
+    if not sweep_results:
+        try:
+            sweep_results = ave_monitor.sweep_scan(category, chain, limit)
+        except Exception as e:
+            send_message(chat_id, f"❌ Sweep failed: {str(e)}")
+            return
 
-        for i, item in enumerate(data, 1):
-            risk = item["risk_adjusted_score"]
-            alert = "🔴" if risk >= 75 else "🟠" if risk >= 55 else "🟡"
-            lines.append(f"{i}. `{item['token']}` {alert} {risk:.0f}%")
-            lines.append(f"   Price: `${item['price']:.6f}` | TVL: `${item['tvl']/1e6:.2f}M`")
+    if not sweep_results:
+        send_message(chat_id, f"❌ No results found for {scope}")
+        return
 
-        send_message(chat_id, "\n".join(lines))
-    except Exception as e:
-        send_message(chat_id, f"❌ Sweep failed: {str(e)}")
+    lines = [f"*📊 Top {len(sweep_results)} {category.upper()} Tokens ({chain})*", ""]
+
+    for i, item in enumerate(sweep_results[:10], 1):
+        # Support both API response format and direct monitor format
+        score_data = item.get("score", {})
+        risk = score_data.get("risk_adjusted", 0) if isinstance(score_data, dict) else 0
+        alert_level = score_data.get("alert_level", "green") if isinstance(score_data, dict) else "green"
+        alert = {"green": "🟢", "yellow": "🟡", "orange": "🟠", "red": "🔴"}.get(alert_level, "⚪")
+        token_name = str(item.get("token", "???")).upper()
+        price = float(item.get("price", 0) or 0)
+        tvl = float(item.get("tvl", 0) or 0)
+        total_score = score_data.get("total", 0) if isinstance(score_data, dict) else 0
+
+        lines.append(f"{i}. `{token_name}` {alert} Score: {total_score}/100")
+        if price > 0:
+            lines.append(f"   Price: `${price:.6f}` | TVL: `${tvl/1e6:.2f}M`")
+
+    send_message(chat_id, "\n".join(lines))
+
+
+def handle_command_status(chat_id: int):
+    """Handle /status command — show user's monitoring stats"""
+    sync_alerts_from_storage()
+    alerts = alerts_manager.get_user_alerts(chat_id)
+
+    with watchlist_lock:
+        watchlist_items = watchlists.get(chat_id, [])
+
+    active_alerts = sum(1 for a in alerts if a.enabled)
+    total_alerts = len(alerts)
+    watchlist_count = len(watchlist_items)
+
+    lines = [
+        "*📈 Your Monitoring Status*",
+        "",
+        f"🔔 Alerts: {active_alerts} active / {total_alerts} total",
+        f"👁️ Watchlist: {watchlist_count} tokens",
+        "",
+    ]
+
+    if alerts:
+        lines.append("*Recent Alerts:*")
+        for alert in alerts[:5]:
+            status = "✅" if alert.enabled else "⏸️"
+            lines.append(f"{status} {alert.token.upper()} ({alert.chain}) — {alert.alert_type} {alert.condition} {alert.threshold}")
+        lines.append("")
+
+    if watchlist_items:
+        lines.append("*Watchlist:*")
+        for item in watchlist_items[:5]:
+            lines.append(f"• {item['token'].upper()} ({item['chain']})")
+        lines.append("")
+
+    if not alerts and not watchlist_items:
+        lines.extend([
+            "No active monitoring yet.",
+            "",
+            "*Get started:*",
+            "`/alert create TOKEN chain price above 100`",
+            "`/watchlist add TOKEN chain`",
+        ])
+
+    send_message(chat_id, "\n".join(lines))
+
+
+def handle_command_chains(chat_id: int):
+    """Handle /chains command"""
+    lines = [
+        "*🌐 Supported Chains:*",
+        "",
+        "• `solana` — ⚡ Fast, low fees",
+        "• `ethereum` — 🔷 DeFi king",
+        "• `bsc` — 🟡 Binance chain",
+        "• `base` — 🔵 Coinbase L2",
+        "• `arbitrum` — 🟣 Ethereum L2",
+        "• `optimism` — 🔴 Ethereum L2",
+        "• `polygon` — 🟣 Layer 2",
+        "• `avalanche` — 🔺 Fast finality",
+        "",
+        "Default: `solana`",
+    ]
+    send_message(chat_id, "\n".join(lines))
+
+
+def handle_command_ave(chat_id: int, args: List[str]):
+    """Handle /ave command (alias for /analyze)"""
+    if not args:
+        send_message(chat_id, "❌ Usage: `/ave TOKEN [chain]`\nExample: `/ave SOL solana`")
+        return
+
+    token = args[0]
+    chain = args[1] if len(args) > 1 else "solana"
+
+    send_message(chat_id, f"🔄 Analyzing {token.upper()} on {chain}...")
+
+    # Try API first
+    info = format_token_info(token, chain)
+    if str(info).startswith("❌"):
+        # Fallback to direct monitor
+        try:
+            report = ave_monitor.analyze_single_token(token, chain)
+            if "error" not in report:
+                info = _format_direct_report(report)
+            else:
+                send_message(chat_id, f"❌ {report['error']}")
+                return
+        except Exception as e:
+            send_message(chat_id, f"❌ Error: {str(e)}")
+            return
+
+    markup = build_launch_web_markup(token, chain)
+    sent = send_message(chat_id, info, reply_markup=markup if markup else None)
+    if not isinstance(sent, dict) or not sent.get("ok"):
+        send_message(chat_id, info)
+
+
+def _format_direct_report(report: Dict) -> str:
+    """Format a direct ave_monitor report for Telegram."""
+    s = report["score"]
+    sig = report["signals"]
+
+    alert_emoji = {
+        "green": "🟢", "yellow": "🟡", "orange": "🟠", "red": "🔴",
+    }.get(s["alert_level"], "⚪")
+
+    lines = [
+        f"📊 *{report['token'].upper()}* ({report['chain']})",
+        f"Price: `${report['price']:.6f}` | 24h: {report['price_change_24h']:+.1f}%",
+        f"TVL: `${report['tvl']/1e6:.2f}M` | Holders: {report['holders']:,}",
+        "",
+        f"*Score: {s['total']}/100* {alert_emoji}",
+        f"Risk-Adjusted: {s['risk_adjusted']}/100",
+        f"Confidence: {s['confidence']}%",
+        f"Phase: {s['market_phase'].upper()}",
+        "",
+        "*Signals:*",
+        f"⚡ Vol Divergence: {sig['volume_divergence']}/30",
+        f"📈 Vol Momentum: {sig['volume_momentum']}/25",
+        f"🏦 TVL Stability: {sig['tvl_stability']}/20",
+        f"👥 Holders: {sig['holder_distribution']}/15",
+        f"💎 Whale: {sig['whale_score']}/40",
+    ]
+
+    if report.get("whales"):
+        lines.append("")
+        lines.append("*Top Whales:*")
+        for w in report["whales"][:3]:
+            addr = f"{w['address'][:6]}...{w['address'][-4:]}"
+            lines.append(f"  • {addr}: `{w['balance_ratio']:.2f}%`")
+
+    return "\n".join(lines)
 
 
 def handle_command_alert_create(chat_id: int, args: List[str]):
@@ -438,6 +634,9 @@ def handle_message(chat_id: int, message_text: str, chat_meta: Optional[Dict] = 
         return
 
     command = parts[0].lower()
+    # Strip bot username suffix (e.g. /sweep@mybotname)
+    if "@" in command:
+        command = command.split("@")[0]
     args = parts[1:]
 
     if command == COMMAND_START:
@@ -446,8 +645,31 @@ def handle_message(chat_id: int, message_text: str, chat_meta: Optional[Dict] = 
         handle_command_help(chat_id)
     elif command == COMMAND_ANALYZE:
         handle_command_analyze(chat_id, args)
-    elif command == COMMAND_SWEEP:
+    elif command == COMMAND_AVE:
+        # /ave supports subcommands: watch, unwatch, list
+        if args and args[0].lower() == "watch":
+            handle_command_watchlist_add(chat_id, args[1:])
+        elif args and args[0].lower() == "unwatch":
+            if len(args) < 2:
+                send_message(chat_id, "Usage: `/ave unwatch TOKEN`")
+                return
+            token = args[1]
+            with watchlist_lock:
+                watchlists[chat_id] = [
+                    w for w in watchlists.get(chat_id, [])
+                    if w["token"].lower() != token.lower()
+                ]
+            send_message(chat_id, f"✅ Removed {token} from watchlist")
+        elif args and args[0].lower() == "list":
+            handle_command_watchlist_list(chat_id)
+        else:
+            handle_command_ave(chat_id, args)
+    elif command in (COMMAND_SWEEP, COMMAND_AVESWEEP):
         handle_command_sweep(chat_id, args)
+    elif command == COMMAND_CHAINS:
+        handle_command_chains(chat_id)
+    elif command == COMMAND_STATUS:
+        handle_command_status(chat_id)
     elif command == COMMAND_ALERT:
         sync_alerts_from_storage()
         if not args:
