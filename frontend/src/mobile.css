@@ -1,49 +1,257 @@
-/* Mobile Responsive Styles */
+/* =====================================================
+   RESPONSIVE STYLES — iPad, Tablet & Mobile
+   Breakpoints:
+     ≤1024px  : Tablet / iPad landscape
+     ≤820px   : iPad portrait / large phone
+     ≤768px   : Standard mobile / iPhone (hamburger nav)
+     ≤480px   : Small phones
+   ===================================================== */
 
+/* ─── TABLET / iPAD LANDSCAPE (≤1024px) ─────────────── */
 @media (max-width: 1024px) {
-  /* Platform Nav */
+  /* Nav: collapse center links slightly */
   .platform-nav {
-    grid-template-columns: auto 1fr;
-    gap: 12px;
     padding: 0 16px;
+    grid-template-columns: 140px minmax(0, 1fr) auto;
+  }
+
+  .platform-link {
+    padding: 0 10px;
+    font-size: 0.82rem;
+  }
+
+  /* Two-column hero grid on tablet landscape */
+  .hero-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 14px;
+  }
+
+  /* Keep analyze card full-width */
+  .hero-grid .analyze-card {
+    grid-column: 1 / -1;
+  }
+
+  /* control-grid adapts */
+  .control-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  /* Engine KPIs: 4 columns naturally — no change needed */
+  .engine-kpis {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  /* Landing grid: allow side-by-side */
+  .landing-main {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) !important;
+  }
+
+  /* Dropdown table area */
+  .bm-table-grid {
+    grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 768px) {
-  /* App Shell & Panels */
+/* ─── iPAD PORTRAIT / LARGE PHONE (≤920px) ──────────── */
+@media (max-width: 920px) {
+  /* Fix sticky nav fixed height issue when nav wraps to 2 rows */
+  .platform-nav-wrap {
+    height: auto;
+    min-height: auto;
+    padding-bottom: 4px;
+  }
+
+  /* Landing: compact search form / filter row for iPad portrait */
+  .bm-search-hero {
+    gap: 12px;
+    margin-bottom: 18px;
+    justify-items: stretch;
+  }
+
+  .bm-search-form {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .bm-search-wrap {
+    width: 100%;
+    height: 48px;
+  }
+
+  .bm-search-controls {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .bm-mode-switch {
+    gap: 6px;
+  }
+
+  .bm-chain-select select {
+    min-width: 110px;
+  }
+
+  /* Hero meta: wrap on iPad portrait */
+  .bm-hero-meta {
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  /* Filter chips: wrap nicely on iPad */
+  .bm-recent-filters {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  /* Two-col hero grid */
+  .hero-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px;
+  }
+
+  .hero-grid .analyze-card {
+    grid-column: 1 / -1;
+  }
+
+  /* Score + Sweep side by side */
+  .hero-grid .score-card,
+  .hero-grid .action-card {
+    grid-column: span 1;
+  }
+
+  /* Stacked control grid */
+  .control-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .control-grid.single {
+    grid-template-columns: 1fr;
+  }
+
+  /* KPIs — 2x2 grid on iPad portrait */
+  .engine-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px;
+  }
+
+  /* Landing adjustments */
+  .landing-main {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      'hero'
+      'features'
+      'side'
+      'flow' !important;
+  }
+
+  .landing-side-stack {
+    grid-area: side;
+  }
+
+  /* Table: allow horizontal scroll */
+  .table-wrap,
+  .table-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Trade buttons in table — wrap to prevent overflow at iPad width */
+  .trade-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .btn-trade {
+    flex: 0 1 auto;
+    font-size: 0.78rem;
+    padding: 5px 8px !important;
+  }
+
+  /* Platform primary menu: left-align on smaller tablets */
+  .platform-primary-menu {
+    right: auto;
+    left: 0;
+    width: min(94vw, 340px);
+  }
+
+  /* Explore head */
+  .bm-explore-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .bm-explore-head h2 {
+    font-size: 1.5rem;
+  }
+
+  .bm-recent-chain-filter {
+    margin-left: 0;
+  }
+
+  .bm-analyze-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── MOBILE / HAMBURGER NAV (≤920px) ───────────────── */
+@media (max-width: 920px) {
+  /* App shell */
   .app-shell {
     overflow-x: hidden;
   }
+
   .bm-main {
     padding: 12px !important;
   }
-  
-  /* Platform Nav */
+
+  /* ── Nav: revert to single-row with hamburger ── */
+  .platform-nav-wrap {
+    height: 56px;
+    min-height: 56px;
+    padding-bottom: 0;
+  }
+
   .platform-nav {
-    display: flex;
+    display: flex !important;
     justify-content: space-between;
     align-items: center;
     padding: 0 16px;
-    height: 56px;
-    min-height: 56px;
+    height: 56px !important;
+    min-height: 56px !important;
+    grid-template-columns: unset !important;
+    grid-template-areas: unset !important;
+    gap: 0 !important;
   }
+
+  /* Show hamburger toggle */
   .mobile-menu-toggle {
-    display: block !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     color: #fff;
     cursor: pointer;
     padding: 8px;
     margin-left: -8px;
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
   }
+
+  /* Center logo */
   .platform-logo {
-    display: flex; /* Keep logo on mobile when using hamburger */
+    display: flex !important;
     flex: 1;
     justify-content: center;
+    grid-area: unset !important;
   }
-  
-  /* Mobile Sidebar Overlay */
+
+  /* Show overlay */
   .mobile-overlay {
+    display: block !important;
     position: fixed;
     top: 0;
     left: 0;
@@ -52,17 +260,28 @@
     background: rgba(0, 0, 0, 0.65);
     backdrop-filter: blur(3px);
     z-index: 90;
-    display: block !important;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s ease;
   }
+
   .mobile-overlay.active {
     opacity: 1;
     pointer-events: auto;
   }
 
-  /* Fixed Side Panel */
+  /* Show mobile menu header */
+  .mobile-menu-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding: 20px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    margin-bottom: 12px !important;
+    width: 100% !important;
+  }
+
+  /* Fixed side panel */
   .platform-links-container {
     position: fixed !important;
     top: 0 !important;
@@ -82,19 +301,49 @@
     transform: translateX(-100%) !important;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
   }
+
   .platform-links-container.mobile-open {
     transform: translateX(0) !important;
   }
-  
-  .mobile-menu-header {
+
+  /* Side nav links */
+  .platform-links {
     display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    padding: 20px !important;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-    margin-bottom: 12px !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    grid-template-columns: unset !important;
+    height: auto !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 0 16px !important;
     width: 100% !important;
+    overflow: visible !important;
   }
+
+  .platform-link {
+    height: auto !important;
+    width: 100% !important;
+    padding: 16px 20px !important;
+    font-size: 1.05rem !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    text-align: left !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    box-sizing: border-box !important;
+  }
+
+  .platform-link:hover,
+  .platform-link.active {
+    background: rgba(99, 155, 255, 0.15) !important;
+  }
+
+  .platform-link-indicator {
+    display: none;
+  }
+
+  /* Close button */
   .mobile-menu-close {
     background: transparent !important;
     border: none;
@@ -105,152 +354,201 @@
     padding: 4px 8px !important;
     width: auto !important;
   }
-  
-  .platform-links {
+
+  /* Nav right — keep compact */
+  .platform-nav-right {
     display: flex !important;
-    flex-direction: column !important;
-    flex-wrap: nowrap !important;
-    height: auto !important;
-    align-items: stretch !important;
-    gap: 8px !important;
-    padding: 0 16px !important;
-    width: 100% !important;
+    align-items: center;
+    gap: 8px;
+    width: auto !important;
+    grid-area: unset !important;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
   }
-  .platform-link {
-    height: auto !important;
-    width: 100% !important;
-    padding: 16px 20px !important;
-    font-size: 1.1rem !important;
-    border-radius: 8px !important;
-    display: flex !important;
-    align-items: center !important;
-    box-sizing: border-box !important;
-    text-align: left !important;
-    justify-content: flex-start !important;
-    background: rgba(255,255,255,0.03) !important;
+
+  .platform-nav-right button,
+  .mobile-menu-toggle {
+    width: auto;
+    padding: 8px 12px !important;
+    margin-top: 0;
   }
-  .platform-link:hover, .platform-link.active {
-    background: rgba(99, 155, 255, 0.15) !important;
+
+  /* ── Hero / Landing ── */
+  .hero-grid,
+  .stats-grid,
+  .features-grid,
+  .landing-grid {
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
   }
-  .platform-link-indicator {
-    display: none; /* Hide bottom border indicator on mobile */
+
+  .hero-grid .analyze-card,
+  .hero-grid .score-card,
+  .hero-grid .action-card {
+    grid-column: 1 / -1 !important;
   }
-  
-  /* Hero & Landing */
+
   .hero-title {
-    font-size: 2.5rem !important;
+    font-size: 2.2rem !important;
     line-height: 1.2 !important;
   }
+
   .hero-subtitle {
     font-size: 1rem !important;
   }
-  .hero-grid, .stats-grid, .features-grid, .landing-grid {
-    grid-template-columns: 1fr !important;
-    gap: 16px !important;
-  }
-  
-  /* Hide hero metadata (Tracked, Alerts, Coverage, etc.) for minimalist mobile feel */
+
+  /* Hide hero meta for minimalist mobile feel */
   .bm-hero-meta {
     display: none !important;
   }
-  
-  /* Dashboard / Engine Grids */
+
+  /* ── Landing screen ── */
+  .landing-main {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      'hero'
+      'features'
+      'side'
+      'flow' !important;
+  }
+
+  .landing-side-stack {
+    grid-area: side;
+  }
+
+  /* ── Dashboard / Engine grids ── */
   .engine-rule-grid,
   .engine-kpis,
   .dashboard-grid,
   .engine-filters {
-    grid-template-columns: 1fr !important;
-    gap: 12px !important;
-    display: flex;
-    flex-wrap: wrap;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
   }
+
   .engine-settings {
     flex-direction: column;
     align-items: stretch !important;
     gap: 12px !important;
   }
-  .engine-actions, .kpi-box {
-    width: 100%;
-    justify-content: space-between;
+
+  .engine-actions {
+    flex-wrap: wrap;
+    gap: 8px;
   }
+
   .kpi-box {
-    margin-bottom: 8px;
+    width: 100%;
+    margin-bottom: 0;
   }
-  
-  /* Forms & Filters */
+
+  /* ── Control grid: single column on phone ── */
+  .control-grid,
+  .control-grid.single {
+    grid-template-columns: 1fr !important;
+    gap: 10px !important;
+  }
+
+  /* ── Forms & Filters ── */
   .bm-filter-row,
   .bm-filters {
     flex-wrap: wrap;
     gap: 8px !important;
   }
-  .bm-filter-btn, .pill-btn {
-    flex: 1 1 auto;
-    text-align: center;
-    padding: 8px 12px !important;
-    font-size: 0.8rem !important;
-  }
-  .bm-search, .input-wrap {
+
+  .bm-search,
+  .input-wrap {
     width: 100% !important;
   }
-  
-  /* Table wrapping for mobile to prevent layout breakage */
-  .table-wrap, 
+
+  /* ── Table ── */
+  .table-wrap,
   .table-container {
-    width: 100vw;
-    margin-left: -12px;
-    padding-left: 12px;
-    padding-right: 12px;
+    width: 100%;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch;
     margin-bottom: 16px;
   }
+
   .bm-table {
-    min-width: 700px;
+    min-width: 640px;
   }
-  
-  /* API Docs */
-  .apidoc-urls-grid, 
+
+  .bm-table th,
+  .bm-table td {
+    font-size: 0.82rem !important;
+    padding: 10px 8px !important;
+  }
+
+  /* Trade actions — stack on mobile */
+  .trade-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .btn-trade {
+    flex: 1 1 auto;
+    font-size: 0.76rem;
+    padding: 5px 8px !important;
+    text-align: center;
+  }
+
+  /* ── API Docs ── */
+  .apidoc-urls-grid,
   .api-cards {
     grid-template-columns: 1fr !important;
     display: flex;
     flex-direction: column;
   }
+
   .api-card {
     padding: 16px !important;
   }
+
   .apidoc-code-wrap {
     overflow-x: auto;
   }
-  
-  /* General Utility */
+
+  /* ── Glass card padding ── */
   .glass {
     padding: 16px !important;
   }
-  h2 {
-    align-items: center !important;
-    justify-content: center !important;
-  }
-  
-  /* Remove `button` raw tag from here, let specific classes handle full width */
-  .btn-primary, .btn-ghost, .platform-cta, .hero-cta, .engine-actions button {
+
+  /* ── Buttons: full width for main CTAs ── */
+  .btn-primary,
+  .btn-ghost,
+  .platform-cta,
+  .hero-cta,
+  .engine-actions button {
     padding: 12px 16px !important;
-    font-size: 1rem !important;
-    width: 100%; /* Full width core buttons */
+    font-size: 0.95rem !important;
+    width: 100%;
     text-align: center;
     justify-content: center;
     margin-top: 4px;
     box-sizing: border-box;
   }
-  
-  /* Exception: Keep right side toggles compact */
-  .platform-nav-right button, .mobile-menu-toggle {
-    width: auto;
-    padding: 8px 12px !important;
-    margin-top: 0;
+
+  /* Exception: keep small pills compact */
+  .bm-filter-chip,
+  .bm-filter-btn,
+  .pill-btn,
+  .bm-dashboard-btn,
+  .tv-chip {
+    width: auto !important;
+    flex: 0 1 auto !important;
+    padding: 7px 12px !important;
+    font-size: 0.82rem !important;
+    border-radius: 99px !important;
+    margin-top: 0 !important;
   }
-  
-  /* Filter chips and pills (Minimalist design for mobile) */
-  .bm-recent-filters, .bm-filters {
+
+  .bm-dashboard-btn {
+    border-radius: 8px !important;
+  }
+
+  /* ── Filter chips row ── */
+  .bm-recent-filters,
+  .bm-filters {
     display: flex;
     flex-wrap: wrap;
     gap: 8px !important;
@@ -258,25 +556,16 @@
     align-items: center;
     width: 100%;
   }
-  .bm-filter-chip, .bm-filter-btn, .pill-btn, .bm-dashboard-btn {
-    width: auto !important;
-    flex: 0 1 auto !important;
-    padding: 8px 14px !important;
-    font-size: 0.85rem !important;
-    border-radius: 99px !important;
-    margin-top: 0 !important;
-  }
-  .bm-dashboard-btn {
-    border-radius: 8px !important;
-  }
 
-  /* Hide huge jump buttons at bottom of landing since we have mobile sidebar */
-  .bm-jump-row, .bm-jump-grid {
+  /* ── Hide jump grid (we have sidebar) ── */
+  .bm-jump-row,
+  .bm-jump-grid {
     display: none !important;
   }
-  
-  /* Exception: Pagination Navigation */
-  .bm-pagination-row, .bm-page-list {
+
+  /* ── Pagination ── */
+  .bm-pagination-row,
+  .bm-page-list {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
@@ -284,46 +573,78 @@
     gap: 8px;
     width: 100%;
   }
+
   .bm-page-btn {
     width: auto !important;
     flex: 0 1 auto;
-    padding: 8px 14px !important;
-    font-size: 0.9rem !important;
+    padding: 8px 12px !important;
+    font-size: 0.88rem !important;
     margin-top: 0 !important;
   }
-  
-  /* Typography and Forms */
-  input, select, .input-wrap {
+
+  /* ── Typography & Inputs ── */
+  input,
+  select,
+  .input-wrap {
     font-size: 1rem !important;
-    padding: 12px !important;
+    padding: 11px !important;
     height: auto !important;
     width: 100% !important;
   }
-  .api-desc, .helper {
-    font-size: 0.9rem !important;
-    line-height: 1.5 !important;
+
+  .api-desc,
+  .helper {
+    font-size: 0.88rem !important;
+    line-height: 1.55 !important;
   }
-  .bm-table th, .bm-table td {
-    font-size: 0.85rem !important;
-    padding: 12px 8px !important;
+
+  /* ── Primary profile menu: centered on phone ── */
+  .platform-primary-menu {
+    right: 0;
+    left: auto;
+    width: min(94vw, 340px);
+    min-width: 0;
+    max-width: 96vw;
   }
 }
 
+/* ─── SMALL PHONES (≤480px) ─────────────────────────── */
 @media (max-width: 480px) {
-  /* Ultra small screens */
-  .platform-link {
-    font-size: 0.75rem;
-    padding: 0 6px;
-  }
   .bm-main {
     padding: 8px !important;
   }
+
   .hero-title {
-    font-size: 2rem !important;
+    font-size: 1.9rem !important;
   }
-  /* Alert components usually pop up right, align them well on mobile */
+
+  /* KPIs: 2 columns still works on small phones */
+  .engine-kpis,
+  .engine-rule-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
   .platform-primary-menu {
-    width: 300px;
-    right: -10px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: min(96vw, 360px);
+    min-width: 0;
+    max-width: 96vw;
+  }
+
+  /* Alert items stack vertically on very small screens */
+  .platform-primary-alert-item,
+  .platform-primary-watchlist-item {
+    grid-template-columns: 1fr;
+  }
+
+  .platform-primary-alert-delete,
+  .platform-primary-watchlist-delete {
+    width: 100%;
+  }
+
+  .platform-primary-menu-divider {
+    margin: 6px 2px;
   }
 }
