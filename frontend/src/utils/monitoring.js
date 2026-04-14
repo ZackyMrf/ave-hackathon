@@ -89,6 +89,44 @@ export function isLikelyAddress(value) {
   return false;
 }
 
+// Maps native/placeholder token addresses to their wrapped equivalents
+// so that external tools (Bubblemaps, Ave Pro) work correctly.
+const NATIVE_TOKEN_WRAPPED_MAP = {
+  // Ethereum mainnet — native ETH placeholder -> WETH
+  'ethereum:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee': '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2',
+  'eth:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee':      '0xC02aaA39b223FE8D0A0E5C4F27eAD9083C756Cc2',
+  // BSC — native BNB placeholder -> WBNB
+  'bsc:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee':      '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
+  // Base — native ETH placeholder -> WETH on Base
+  'base:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee':     '0x4200000000000000000000000000000000000006',
+  // Arbitrum — native ETH placeholder -> WETH on Arbitrum
+  'arbitrum:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee': '0x82af49447d8a07e3bd95bd0d56f35241523fbab1',
+  // Optimism — native ETH placeholder -> WETH on OP
+  'optimism:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee': '0x4200000000000000000000000000000000000006',
+  // Polygon — native MATIC placeholder -> WMATIC
+  'polygon:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee':  '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
+  // Avalanche — native AVAX placeholder -> WAVAX
+  'avalanche:0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee': '0xB31f66AA3C1e785363F0875A1B74E27b85FD66c7',
+  // Solana — native SOL placeholder -> WSOL
+  'solana:so11111111111111111111111111111111111111111':   'So11111111111111111111111111111111111111112',
+  'solana:11111111111111111111111111111111':              'So11111111111111111111111111111111111111112',
+};
+
+/**
+ * Resolve a token address for use in external links.
+ * Replaces native-token placeholder addresses with their wrapped equivalents.
+ * @param {string} address - raw contract address from the API
+ * @param {string} chain   - chain name (ethereum, eth, solana, bsc, ...)
+ * @returns {string} address suitable for Bubblemaps / Ave Pro links
+ */
+export function getLinkAddress(address, chain) {
+  const addr = String(address || '').trim();
+  const ch   = String(chain || '').trim().toLowerCase();
+  if (!addr) return '';
+  const key = `${ch}:${addr.toLowerCase()}`;
+  return NATIVE_TOKEN_WRAPPED_MAP[key] || addr;
+}
+
 function toBubbleMapChain(chain) {
   const ch = String(chain || '').trim().toLowerCase();
   const map = {
@@ -105,10 +143,17 @@ function toBubbleMapChain(chain) {
 }
 
 export function getBubbleMapUrl(address, chain) {
-  const addr = String(address || '').trim();
+  const addr = getLinkAddress(address, chain);
   if (!addr) return '';
   const bubbleChain = toBubbleMapChain(chain);
   return `https://v2.bubblemaps.io/map?address=${encodeURIComponent(addr)}&chain=${encodeURIComponent(bubbleChain)}`;
+}
+
+export function getAveProUrl(address, chain) {
+  const addr = getLinkAddress(address, chain);
+  const ch   = String(chain || '').trim().toLowerCase();
+  if (!addr || !ch) return '';
+  return `https://pro.ave.ai/token/${encodeURIComponent(addr)}-${encodeURIComponent(ch)}`;
 }
 
 export function normalizeSweepResults(inputRows, chainName, requestedTop) {

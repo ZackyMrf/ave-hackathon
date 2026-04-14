@@ -1,3 +1,4 @@
+from ave_helpers import get_ave_service
 #!/usr/bin/env python3
 """
 Ave Accumulation Monitor
@@ -374,25 +375,66 @@ class AveAccumulationMonitor:
         return matrix
     
     def _search_token(self, token: str, chain: str) -> Optional[Dict]:
-        """Search for token by keyword to get address"""
-        params = {"keyword": token, "chain": chain, "limit": 1}
+        """Search token by keyword, fetch multiple candidates, and pick the most legitimate one."""
+        params = {"keyword": token, "chain": chain, "limit": 20}
         results = self._make_request("/v2/tokens", params)
-        
-        if results and isinstance(results, list) and len(results) > 0:
-            item = results[0]
-            # Extract contract address and cache it
-            if item and "token" in item:
-                contract_addr = item.get("token")
-                lookup_key = f"{token.lower()}-{chain.lower()}"
-                # Cache to TOKEN_ADDRESS_MAP for future use
-                if contract_addr and lookup_key not in TOKEN_ADDRESS_MAP:
-                    TOKEN_ADDRESS_MAP[lookup_key] = contract_addr
-                    print(f"✅ Cached: {lookup_key} → {contract_addr}")
-            return item
-        return None
+        items = self._normalize_token_items(results)
+        if not items:
+            return None
+        if len(items) == 1:
+            return items[0]
+        # Multiple results — pick the most legitimate one (highest TVL + holders)
+        return self._pick_best_search_candidate(items, token)
+
+    def _pick_best_search_candidate(self, items: List[Dict], query: str) -> Optional[Dict]:
+        """Score and pick the most legitimate token from search results.
+        Criteria (in priority order):
+          1. Exact symbol match scores highest base points
+          2. TVL/Liquidity (log-scaled) is the primary legitimacy signal
+          3. Holder count (log-scaled) is the secondary signal
+          4. Low-TVL exact-match tokens are penalised to avoid fakes.
+        """
+        q = query.lower().strip()
+        best: Optional[Dict] = None
+        best_score = -1.0
+
+        for item in items:
+            sym = str(item.get("symbol", "")).strip().lower()
+            name = str(item.get("name", "")).strip().lower()
+            addr = str(item.get("token", item.get("address", ""))).strip().lower()
+
+            # 1. Match score
+            if sym == q:
+                match = 100
+            elif q in sym:
+                match = 80
+            elif q in name:
+                match = 60
+            elif addr == q:
+                match = 100
+            else:
+                continue  # unrelated, skip
+
+            # 2. Legitimacy metrics
+            try:
+                tvl = float(item.get("tvl", 0) or item.get("liquidity", 0) or 0)
+                holders = int(float(item.get("holders", 0) or 0))
+                legit = match + math.log10(tvl + 1) * 15 + math.log10(holders + 1) * 5
+
+                # Penalise exact-match tokens with tiny TVL (almost certainly fake)
+                if sym == q and tvl < 1_000 and len(items) > 1:
+                    legit -= 60
+
+                if legit > best_score:
+                    best_score = legit
+                    best = item
+            except (ValueError, TypeError):
+                continue
+
+        return best
 
     def _resolve_token_address(self, token_input: str, chain: str) -> Tuple[str, Optional[Dict]]:
-        """Resolve contract address for token-id endpoints; reject symbol-only fallbacks."""
+        """Resolve contract address; prefers cached map, then multi-result search with filtering."""
         lookup_key = f"{token_input.lower()}-{chain.lower()}"
 
         if _looks_like_address(token_input):
@@ -406,6 +448,9 @@ class AveAccumulationMonitor:
         if isinstance(search_data, dict):
             candidate = str(search_data.get("token") or search_data.get("address") or "").strip()
             if _looks_like_address(candidate):
+                # Auto-cache resolved address
+                if lookup_key not in TOKEN_ADDRESS_MAP:
+                    TOKEN_ADDRESS_MAP[lookup_key] = candidate
                 return candidate, search_data
 
         return "", search_data
@@ -993,26 +1038,50 @@ class AveAccumulationMonitor:
         return f"${num:.2f}{suffix}"
     
     def analyze_single_token(self, token: str, chain: str) -> Dict:
-        """Mode A: Deep analysis on single token"""
+        """Mode A: Deep analysis on single token with fake token filtering and auto-pick real token if needed"""
         chain = "eth" if str(chain).strip().lower() == "ethereum" else str(chain).strip().lower()
         print(f"🔍 Analyzing {token.upper()} on {chain}...")
-        
+
         # Fetch data
         token_data = self.get_token_data(token, chain)
         if not token_data:
             return {"error": f"Could not fetch data for {token} on {chain}"}
-        
+
+        # --- FILTER PALSU ---
+        MIN_TVL = 100_000   # $100k
+        MIN_MARKETCAP = 1_000_000  # $1M
+        native_tokens = {"ETH", "SOL", "BNB", "MATIC", "AVAX", "ARB", "OP"}
+        is_native = token_data.symbol.upper() in native_tokens
+        if not is_native:
+            if (token_data.tvl is not None and token_data.tvl < MIN_TVL) or (token_data.market_cap is not None and token_data.market_cap < MIN_MARKETCAP):
+                # --- PATCH: Cari token asli jika filter palsu ---
+                ave_service = get_ave_service()
+                token_items = ave_service.get_tokens_by_chain(chain, limit=100)
+                candidates = [
+                    t for t in token_items
+                    if str(t.get("token", "")).strip().lower() == token_data.symbol.lower()
+                ]
+                if candidates:
+                    candidates.sort(key=lambda t: float(t.get("liquidity", 0)) + float(t.get("market_cap", 0)), reverse=True)
+                    picked = candidates[0]
+                    picked_ca = str(picked.get("ca") or "").strip()
+                    if picked_ca and picked_ca.lower() != token_data.address.lower():
+                        print(f"🔄 Auto-pick real token: {picked_ca}")
+                        return self.analyze_single_token(picked_ca, chain)
+                # --- END PATCH ---
+                return {"error": f"Token {token_data.symbol} kemungkinan token palsu (TVL/MarketCap terlalu kecil)."}
+
         whales = self.get_whale_data(token, chain)
         history = self.get_price_history(token, chain, days=30)
-        
+
         # Calculate score
         score = self.calculate_accumulation_score(token_data, history, whales)
-        
+
         # Get detailed signal descriptions
         _, whale_desc = self.calculate_whale_score(whales)
         _, anomaly_desc = self.calculate_anomaly_score(token_data, history)
         _, pattern_desc = self.match_historical_pattern(token_data, history, whales)
-        
+
         # Build report
         report = {
             "token": token_data.symbol,
@@ -1058,7 +1127,7 @@ class AveAccumulationMonitor:
                 for w in whales[:10]  # Top 10
             ]
         }
-        
+
         return report
     
     def print_single_report(self, report: Dict):

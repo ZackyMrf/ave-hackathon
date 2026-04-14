@@ -5,6 +5,7 @@ import { CHAINS } from '../../constants/monitoring';
 import {
   buildTrendCacheKey,
   formatMoney,
+  getAveProUrl,
   getBubbleMapUrl,
   getIntervalMinutes,
   isLikelyAddress,
@@ -265,7 +266,8 @@ export default function DashboardSection({
                     style={{ padding: '8px 12px' }}
                     onClick={() => {
                       const ca = report.address || report.ca || token;
-                      window.open(`https://pro.ave.ai/token/${ca}-${chain}`, '_blank');
+                      const url = getAveProUrl(ca, chain);
+                      if (url) window.open(url, '_blank');
                     }}
                   >
                     🚀 Trade on Ave
@@ -526,8 +528,8 @@ export default function DashboardSection({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const ca = item.address || item.ca || item.token;
-                                const url = `https://pro.ave.ai/token/${ca}-${sweepChain}`;
-                                window.open(url, '_blank');
+                                const url = getAveProUrl(ca, sweepChain);
+                                if (url) window.open(url, '_blank');
                               }}
                             >
                               🚀 Trade

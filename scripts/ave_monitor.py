@@ -440,25 +440,68 @@ class AveAccumulationMonitor:
         return matrix
     
     def _search_token(self, token: str, chain: str) -> Optional[Dict]:
-        """Search for token by keyword to get address"""
+        """Search token by keyword, fetch multiple candidates, pick the most legitimate one."""
         params = {"keyword": token, "chain": chain, "limit": 20}
         results = self._make_request("/v2/tokens", params)
         items = self._normalize_token_items(results)
+        if not items:
+            return None
+        if len(items) == 1:
+            return items[0]
+        # Multiple results: pick by legitimacy (TVL + holders), not just market cap
+        return self._pick_best_search_candidate(items, token)
 
-        item = self._pick_best_token_candidate(items, token)
-        if item:
-            # Extract contract address and cache it
-            contract_addr = item.get("token")
-            lookup_key = f"{token.lower()}-{chain.lower()}"
-            # Cache to TOKEN_ADDRESS_MAP for future use
-            if _looks_like_address(contract_addr) and lookup_key not in TOKEN_ADDRESS_MAP:
-                TOKEN_ADDRESS_MAP[lookup_key] = str(contract_addr)
-                print(f"✅ Cached: {lookup_key} → {contract_addr}")
-            return item
-        return None
+    def _pick_best_search_candidate(self, items: List[Dict], query: str) -> Optional[Dict]:
+        """Score and pick the most legitimate token from a list of search results.
+
+        Scoring (in priority order):
+          1. Exact symbol match -> highest base points.
+          2. TVL/Liquidity (log-scaled) -> primary legitimacy signal.
+          3. Holder count (log-scaled) -> secondary signal.
+          4. Tokens with near-zero TVL AND near-zero holders on exact symbol match
+             are heavily penalised (almost certainly fake/scam tokens).
+        """
+        q = query.lower().strip()
+        best: Optional[Dict] = None
+        best_score = -1.0
+
+        for item in items:
+            sym  = str(item.get("symbol", "")).strip().lower()
+            name = str(item.get("name",   "")).strip().lower()
+            addr = str(item.get("token",  item.get("address", ""))).strip().lower()
+
+            # 1. Match score
+            if sym == q:
+                match = 100
+            elif q in sym:
+                match = 80
+            elif q in name:
+                match = 60
+            elif addr == q:
+                match = 100
+            else:
+                continue  # unrelated result
+
+            # 2. Legitimacy metrics
+            try:
+                tvl     = float(item.get("tvl", 0) or item.get("liquidity", 0) or 0)
+                holders = int(float(item.get("holders", 0) or 0))
+                legit   = match + math.log10(tvl + 1) * 15 + math.log10(holders + 1) * 5
+
+                # Heavy penalty for exact-symbol match with near-zero TVL (almost certainly fake)
+                if sym == q and tvl < 1_000 and len(items) > 1:
+                    legit -= 60
+
+                if legit > best_score:
+                    best_score = legit
+                    best = item
+            except (ValueError, TypeError):
+                continue
+
+        return best
 
     def _resolve_token_address(self, token_input: str, chain: str) -> Tuple[str, Optional[Dict]]:
-        """Resolve a contract address for token-id endpoints; never return symbol-only values."""
+        """Resolve contract address; prefers cache, then multi-result search with legitimacy filtering."""
         lookup_key = f"{token_input.lower()}-{chain.lower()}"
 
         if _looks_like_address(token_input):
@@ -471,6 +514,9 @@ class AveAccumulationMonitor:
         if isinstance(search_data, dict):
             candidate = str(search_data.get("token") or search_data.get("address") or "").strip()
             if _looks_like_address(candidate):
+                # Auto-cache resolved address
+                if lookup_key not in TOKEN_ADDRESS_MAP:
+                    TOKEN_ADDRESS_MAP[lookup_key] = candidate
                 return candidate, search_data
 
         return "", search_data

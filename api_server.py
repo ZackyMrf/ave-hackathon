@@ -482,6 +482,17 @@ def _build_fallback_report_from_ave(token_data: Dict[str, Any], chain: str, toke
     whales_raw = token_data.get("_whales_raw") if isinstance(token_data, dict) else None
     whales_norm = _normalize_ave_whales(whales_raw)
 
+    # --- FILTER PALSU ---
+    MIN_TVL = 100_000   # $100k
+    MIN_MARKETCAP = 1_000_000  # $1M
+    native_tokens = {"ETH", "SOL", "BNB", "MATIC", "AVAX", "ARB", "OP"}
+    is_native = symbol.upper() in native_tokens
+    tvl = _safe_float(token_data.get("liquidity"), 0.0)
+    market_cap = _safe_float(token_data.get("market_cap"), 0.0)
+    if not is_native:
+        if (tvl < MIN_TVL) or (market_cap < MIN_MARKETCAP):
+            raise HTTPException(status_code=400, detail=f"Token {symbol} kemungkinan token palsu (TVL/MarketCap terlalu kecil).")
+
     new_whales = sum(1 for w in whales_norm if w.get("is_new") and _safe_float(w.get("balance_ratio"), 0.0) >= 1.5)
     accumulating = sum(1 for w in whales_norm if _safe_float(w.get("change_24h"), 0.0) > 5)
     distributing = sum(1 for w in whales_norm if _safe_float(w.get("change_24h"), 0.0) < -5)
@@ -496,9 +507,9 @@ def _build_fallback_report_from_ave(token_data: Dict[str, Any], chain: str, toke
         "price": _safe_float(token_data.get("price"), 0.0),
         "price_change_24h": _safe_float(token_data.get("price_change_24h"), 0.0),
         "volume_24h": _safe_float(token_data.get("volume_24h"), 0.0),
-        "tvl": _safe_float(token_data.get("liquidity"), 0.0),
+        "tvl": tvl,
         "holders": int(token_data.get("holder_count") or 0),
-        "market_cap": _safe_float(token_data.get("market_cap"), 0.0),
+        "market_cap": market_cap,
         "risk_score": 50,
         "score": {
             "total": 0,
@@ -519,11 +530,10 @@ def _build_fallback_report_from_ave(token_data: Dict[str, Any], chain: str, toke
         },
         "descriptions": {
             "whale": whale_desc,
-            "anomaly": "fallback",
-            "pattern": "fallback",
+            "anomaly": "",
+            "pattern": "",
         },
         "whales": whales_norm,
-        "source": "ave_direct_fallback",
     }
 
 
@@ -580,6 +590,7 @@ def _pick_ave_token_from_chain_list(token_items: List[Dict[str, Any]], token_inp
 
     best: Optional[Dict[str, Any]] = None
     best_rank = -1
+    best_liq = -1.0
     best_cap = -1.0
 
     for item in token_items:
@@ -609,10 +620,27 @@ def _pick_ave_token_from_chain_list(token_items: List[Dict[str, Any]], token_inp
         if rank <= 0:
             continue
 
+        # Legitimacy signals: TVL/liquidity is more reliable than market cap
+        liq = _safe_float(item.get("liquidity", item.get("tvl")), 0.0)
         cap = _safe_float(item.get("market_cap"), 0.0)
-        if rank > best_rank or (rank == best_rank and cap > best_cap):
+        holders = int(_safe_float(item.get("holder_count", item.get("holder")), 0))
+
+        # Penalise fake/scam tokens: exact symbol match but near-zero liquidity and holders
+        if symbol.upper() == q_upper and liq < 1.0 and holders < 5 and not is_address:
+            rank -= 50
+
+        # Selection: rank > liquidity > market_cap
+        if rank > best_rank:
+            better = True
+        elif rank == best_rank:
+            better = liq > best_liq or (liq == best_liq and cap > best_cap)
+        else:
+            better = False
+
+        if better:
             best = item
             best_rank = rank
+            best_liq = liq
             best_cap = cap
 
     return best
@@ -674,10 +702,25 @@ def analyze(
         parsed_token, parsed_chain = _parse_token_with_optional_chain(token, chain)
         result = monitor.analyze_single_token(parsed_token, parsed_chain)
         if "error" in result:
-            # Fallback to AVE v3 for both address and symbol inputs when monitor endpoint is restricted.
+            # --- PATCH: Coba cari token asli jika error filter palsu ---
             ave_service = get_ave_service()
+            token_items = ave_service.get_tokens_by_chain(parsed_chain, limit=100)
+            # Cari token dengan symbol sama dan TVL/market cap terbesar
+            candidates = [
+                t for t in token_items
+                if str(t.get("token", "")).strip().lower() == parsed_token.lower()
+            ]
+            if candidates:
+                # Urutkan by TVL/market cap
+                candidates.sort(key=lambda t: float(t.get("liquidity", 0)) + float(t.get("market_cap", 0)), reverse=True)
+                picked = candidates[0]
+                picked_ca = str(picked.get("ca") or "").strip()
+                if picked_ca and picked_ca.lower() != parsed_token.lower():
+                    # Ulangi analisa dengan address
+                    return analyze(token=picked_ca, chain=parsed_chain)
+            # --- END PATCH ---
+            # Fallback lama
             ave_token = None
-
             if _looks_like_address(parsed_token):
                 ave_token = ave_service.get_token_info(parsed_token, parsed_chain)
             else:

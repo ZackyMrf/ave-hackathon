@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PlatformTopNav from './PlatformTopNav';
 import { CHAINS } from '../constants/monitoring';
-import { formatMoney, getBubbleMapUrl, isLikelyAddress, scoreTone } from '../utils/monitoring';
+import { formatMoney, getAveProUrl, getBubbleMapUrl, isLikelyAddress, scoreTone } from '../utils/monitoring';
 
 const RECENT_PAGE_SIZE = 15;
 const MAX_RECENT_PAGES = 5;
@@ -575,7 +575,8 @@ export default function LandingScreen({
                     style={{ width: '100%', padding: '8px 12px' }}
                     onClick={() => {
                       const ca = report.address || report.ca || token;
-                      window.open(`https://pro.ave.ai/token/${ca}-${chain}`, '_blank');
+                      const url = getAveProUrl(ca, chain);
+                      if (url) window.open(url, '_blank');
                     }}
                   >
                     Trade on Ave
