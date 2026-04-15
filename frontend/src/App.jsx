@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import LandingScreen from './components/LandingScreen';
 import PlatformTopNav from './components/PlatformTopNav';
 import DashboardSection from './components/sections/DashboardSection';
@@ -35,7 +36,35 @@ export default function App() {
   const [trendCache, setTrendCache] = useState({});
   const [status, setStatus] = useState('Idle');
   const [error, setError] = useState('');
-  const [activeNav, setActiveNav] = useState('Dashboard');
+  // ── URL-based routing ────────────────────────────────────────────────────
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const PATH_TO_NAV = {
+    '/':           'home',
+    '/home':       'home',
+    '/dashboard':  'Dashboard',
+    '/signal':     'Signal Engine',
+    '/whale-feed': 'Whale Feed',
+    '/risk-matrix':'Risk Matrix',
+    '/api-docs':   'ApiDocs',
+  };
+
+  const NAV_TO_PATH = {
+    'home':          '/home',
+    'Dashboard':     '/dashboard',
+    'Signal Engine': '/signal',
+    'Whale Feed':    '/whale-feed',
+    'Risk Matrix':   '/risk-matrix',
+    'ApiDocs':       '/api-docs',
+  };
+
+  const activeNav = PATH_TO_NAV[location.pathname] ?? 'Dashboard';
+
+  function setActiveNav(navKey) {
+    navigate(NAV_TO_PATH[navKey] ?? '/dashboard');
+  }
+  // ────────────────────────────────────────────────────────────────────────────
   const [selectedToken, setSelectedToken] = useState('');
   const [selectedPairAddress, setSelectedPairAddress] = useState('');
   const [selectedTokenAddress, setSelectedTokenAddress] = useState('');
@@ -62,7 +91,7 @@ export default function App() {
   const [selectedWhaleWallet, setSelectedWhaleWallet] = useState('');
   const [whaleWalletHistory, setWhaleWalletHistory] = useState({});
   const [sweepLoading, setSweepLoading] = useState(false);
-  const [showHome, setShowHome] = useState(true);
+  const showHome = activeNav === 'home';
   const [telegramChatIdInput, setTelegramChatIdInput] = useState(() => {
     try {
       return window.localStorage.getItem(TELEGRAM_CHAT_ID_KEY) || '';
@@ -955,8 +984,7 @@ export default function App() {
   }
 
   function handleNavigate(label) {
-    setShowHome(false);
-    setActiveNav(label);
+    navigate(NAV_TO_PATH[label] ?? '/dashboard');
     mainPaneRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
@@ -1201,9 +1229,9 @@ export default function App() {
       <PlatformTopNav
         activeItem={activeNav}
         sectionItems={navItems}
-        onGoHome={() => { setShowHome(true); }}
+        onGoHome={() => navigate('/home')}
         onSelect={(key) => {
-          if (key === 'home') { setShowHome(true); } else { handleNavigate(key); }
+          if (key === 'home') { navigate('/home'); } else { handleNavigate(key); }
         }}
         primaryActionLabel={telegramActionLoading ? 'Connecting...' : 'Connect Telegram'}
         onPrimaryAction={startTelegramDeepLinkLogin}

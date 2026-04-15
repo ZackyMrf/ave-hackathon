@@ -397,7 +397,7 @@ NEXT ACTIONS:
 
 ## Telegram Bot Commands
 
-Bisa digunakan langsung dari Telegram tanpa CLI:
+Can be used directly from Telegram without the CLI:
 
 | Command | Description | Example |
 |---------|-------------|---------|
@@ -406,14 +406,14 @@ Bisa digunakan langsung dari Telegram tanpa CLI:
 | `/avehelp` | Show help message | `/avehelp` |
 | `/avechains` | List supported chains | `/avechains` |
 
-### Usage dari Telegram
+### Telegram Usage
 
-Kirim command langsung:
+Send the command directly:
 ```
 /ave TRUMP solana
 ```
 
-Response dalam format Markdown dengan emoji untuk readability.
+Response is in Markdown format with emojis for better readability.
 
 ---
 
