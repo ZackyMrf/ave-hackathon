@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { NavLink } from 'react-router-dom';
 
 export default function PlatformTopNav({
   activeItem,
@@ -78,18 +79,47 @@ export default function PlatformTopNav({
           </div>
           <div className="platform-links" role="tablist" aria-label="primary navigation">
             {sectionItems.map((item) => {
-              const isActive = activeItem === item.key;
+              // Map nav key to URL path
+              const NAV_PATH = {
+                'home':          '/home',
+                'Dashboard':     '/dashboard',
+                'Signal Engine': '/signal',
+                'Whale Feed':    '/whale-feed',
+                'Risk Matrix':   '/risk-matrix',
+                'ApiDocs':       '/api-docs',
+              };
+              const path = NAV_PATH[item.key] ?? '/';
+              const isHome = item.key === 'home';
+
+              if (isHome) {
+                // Home resets to landing — keep as button
+                return (
+                  <button
+                    key={item.key}
+                    className={`platform-link ${activeItem === item.key ? 'active' : ''}`}
+                    onClick={() => handleMobileNav(item.key)}
+                    role="tab"
+                    aria-selected={activeItem === item.key}
+                  >
+                    {item.label}
+                  </button>
+                );
+              }
+
               return (
-                <button
+                <NavLink
                   key={item.key}
-                  className={`platform-link ${isActive ? 'active' : ''}`}
-                  onClick={() => handleMobileNav(item.key)}
+                  to={path}
+                  className={({ isActive }) =>
+                    `platform-link${isActive ? ' active' : ''}`
+                  }
+                  onClick={() => setMobileMenuOpen(false)}
                   role="tab"
-                  aria-selected={isActive}
+                  aria-selected={activeItem === item.key}
                 >
                   {item.label}
-                  {isActive && <span className="platform-link-indicator" />}
-                </button>
+                  {activeItem === item.key && <span className="platform-link-indicator" />}
+                </NavLink>
               );
             })}
           </div>
