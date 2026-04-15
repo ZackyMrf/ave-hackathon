@@ -76,6 +76,25 @@ export function getAddressExplorerUrl(chain, address) {
   return templates[ch] || '';
 }
 
+export function getTxExplorerUrl(chain, txHash) {
+  const hash = String(txHash || '').trim();
+  const ch = String(chain || '').trim().toLowerCase();
+  if (!hash) return '';
+
+  const templates = {
+    solana: `https://solscan.io/tx/${encodeURIComponent(hash)}`,
+    ethereum: `https://etherscan.io/tx/${encodeURIComponent(hash)}`,
+    bsc: `https://bscscan.com/tx/${encodeURIComponent(hash)}`,
+    base: `https://basescan.org/tx/${encodeURIComponent(hash)}`,
+    arbitrum: `https://arbiscan.io/tx/${encodeURIComponent(hash)}`,
+    optimism: `https://optimistic.etherscan.io/tx/${encodeURIComponent(hash)}`,
+    polygon: `https://polygonscan.com/tx/${encodeURIComponent(hash)}`,
+    avalanche: `https://snowtrace.io/tx/${encodeURIComponent(hash)}`,
+  };
+
+  return templates[ch] || '';
+}
+
 export function formatSnapshotTime(ts) {
   if (!Number.isFinite(Number(ts))) return '-';
   return new Date(Number(ts)).toLocaleString();

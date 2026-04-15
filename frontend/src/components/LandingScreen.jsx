@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import PlatformTopNav from './PlatformTopNav';
 import { CHAINS } from '../constants/monitoring';
-import { formatMoney, getAveProUrl, getBubbleMapUrl, isLikelyAddress, scoreTone } from '../utils/monitoring';
+import { formatMoney, getAveProUrl, getBubbleMapUrl, isLikelyAddress, scoreTone, getTxExplorerUrl } from '../utils/monitoring';
 
 const RECENT_PAGE_SIZE = 15;
 const MAX_RECENT_PAGES = 5;
@@ -458,7 +458,21 @@ export default function LandingScreen({
                     return (
                       <tr key={String(row.id || `${row.txHash}:${row.tokenAddress}`)}>
                         <td data-label="Time" title={ts > 0 ? new Date(ts * 1000).toLocaleString() : '-'}>{formatRelativeTime(ts)}</td>
-                        <td data-label="Wallet" className="bm-wallet">{shortWallet(row.wallet)}</td>
+                        <td data-label="Wallet" className="bm-wallet">
+                          {getTxExplorerUrl(row.chain, row.txHash) ? (
+                            <a 
+                              href={getTxExplorerUrl(row.chain, row.txHash)} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              style={{ textDecoration: 'underline', color: 'inherit' }}
+                              title="View Transaction"
+                            >
+                              {shortWallet(row.wallet)}
+                            </a>
+                          ) : (
+                            shortWallet(row.wallet)
+                          )}
+                        </td>
                         <td data-label="Side">
                           <span className={`bm-side-badge ${String(row.side || '').toUpperCase() === 'BUY' ? 'buy' : 'sell'}`}>
                             {String(row.side || '').toUpperCase() || '-'}
